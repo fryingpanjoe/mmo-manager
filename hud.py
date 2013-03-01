@@ -22,14 +22,14 @@ class MobIcon(object):
             other_rect = self.bounds.inflate(-8, -8)
             pygame.draw.rect(screen, (160, 160, 255), other_rect, 2)
 
-    def get_mob_type(self):
-        return self.actor.type
+    def get_mob_name(self):
+        return self.actor.name
 
     def intersects(self, mouse_pos):
         return self.bounds.collidepoint(mouse_pos)
 
     def get_label(self):
-        return self.actor.type
+        return self.actor.name
 
 
 class Hud(object):
@@ -67,12 +67,12 @@ class Hud(object):
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             clicked_icon = self.find_icon_at(pygame.mouse.get_pos())
             if clicked_icon:
-                self.user.set_selected_mob_type(clicked_icon.get_mob_type())
+                self.user.set_selected_mob_name(clicked_icon.get_mob_name())
             else:
                 spawn_pos = vec2(pygame.mouse.get_pos())
                 if self.world.is_valid_position(spawn_pos):
                     self.world.spawn_actor_at(
-                        self.user.get_selected_mob_type(), spawn_pos)
+                        self.user.get_selected_mob_name(), spawn_pos)
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 2:
             self.world.add_player()
 
@@ -97,7 +97,7 @@ class Hud(object):
         for icon in self.mob_icons:
             icon.draw(
                 screen,
-                self.user.get_selected_mob_type() == icon.get_mob_type())
+                self.user.get_selected_mob_name() == icon.get_mob_name())
             if icon.intersects(pygame.mouse.get_pos()):
                 self.rendering.print_text(
                     (icon.bounds.centerx, icon.bounds.top - 10),

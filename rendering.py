@@ -1,4 +1,5 @@
 import pygame
+from scheduling import Timer
 from vec2 import *
 
 class Renderer(object):
@@ -25,16 +26,16 @@ class Renderer(object):
         pygame.draw.rect(screen, (0, 0, 0), (bar_x, bar_y, bar_width, bar_height), 1)
 
     def combat_text(self, pos, text, color, floating = True):
-        self.renderables.append((Timer(1), Rendering.Text(self.font, text, pos, color, True, 50 if floating else 0, 70 if floating else 0)))
+        self.renderables.append((Timer(1), Text(self.font, text, pos, color, True, 50 if floating else 0, 70 if floating else 0)))
 
     def small_combat_text(self, pos, text, color, floating = True):
-        self.renderables.append((Timer(1), Rendering.Text(self.small_font, text, pos, color, True, 50 if floating else 0, 70 if floating else 0)))
+        self.renderables.append((Timer(1), Text(self.small_font, text, pos, color, True, 50 if floating else 0, 70 if floating else 0)))
 
     def print_text(self, pos, text, color, centered = False):
-        self.renderables.append((None, Rendering.Text(self.font, text, pos, color, centered)))
+        self.renderables.append((None, Text(self.font, text, pos, color, centered)))
 
     def visualize_attack(self, from_, to, color):
-        self.renderables.append((Timer(0.5), Rendering.Line(from_, to, color, 1)))
+        self.renderables.append((Timer(0.5), Line(from_, to, color, 1)))
 
     def load_image(self, filename, colorkey = None):
         if filename in self.image_cache:
