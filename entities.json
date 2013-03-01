@@ -1,0 +1,108 @@
+{
+    "player" : {
+        "type" : "player",
+        "color" : [0, 0, 192],
+        "speed" : 25,
+        "radius" : 8,
+        "min_range" : 30,
+        "max_range" : 50,
+        "min_damage" : 10,
+        "max_damage" : 30,
+        "min_health" : 100,
+        "max_health" : 150,
+        "health_regen" : 10,
+        "attack_time" : 3,
+        "regen_time" : 2
+    },
+
+    "creep" : {
+        "type" : "creep",
+        "color" : [255, 0, 0],
+        "speed" : 15,
+        "radius" : 4,
+        "min_range" : 5,
+        "max_range" : 5,
+        "threat_range" : 20,
+        "min_damage" : 5,
+        "max_damage" : 5,
+        "min_health" : 10,
+        "max_health" : 10,
+        "health_regen" : 0,
+        "attack_time" : 2,
+        "regen_time" : 4,
+        "loot_avg" : 10
+    },
+
+    "supercreep" : {
+        "type" : "supercreep",
+        "image" : "supercreep.png",
+        "image_dead" : "supercreep_dead.png",
+        "color" : [255, 128, 0],
+        "speed" : 20,
+        "radius" : 6,
+        "min_range" : 15,
+        "max_range" : 15,
+        "min_damage" : 15,
+        "max_damage" : 35,
+        "min_health" : 60,
+        "max_health" : 70,
+        "health_regen" : 10,
+        "attack_time" : 3,
+        "regen_time" : 5,
+        "loot_avg" : 100,
+        "loot_var" : 50
+    },
+
+    "runner" : {
+        "type" : "runner",
+        "color" : [64, 128, 255],
+        "speed" : 35,
+        "radius" : 2,
+        "min_range" : 50,
+        "max_range" : 50,
+        "min_damage" : 2,
+        "max_damage" : 2,
+        "min_health" : 20,
+        "max_health" : 20,
+        "health_regen" : 0,
+        "attack_time" : 0.25,
+        "regen_time" : 0,
+        "loot_avg" : 40
+    },
+
+    "sniper" : {
+        "type" : "sniper",
+        "color" : [64, 128, 64],
+        "speed" : 10,
+        "radius" : 3,
+        "min_range" : 100,
+        "max_range" : 150,
+        "min_damage" : 40,
+        "max_damage" : 80,
+        "miss_rate" : 0.05,
+        "min_health" : 10,
+        "max_health" : 20,
+        "health_regen" : 0,
+        "attack_time" : 7,
+        "regen_time" : 10,
+        "loot_avg" : 80
+    },
+
+    "tower" : {
+        "type" : "tower",
+        "color" : [64, 64, 64],
+        "speed" : 0,
+        "radius" : 16,
+        "min_range" : 150,
+        "max_range" : 150,
+        "min_damage" : 40,
+        "max_damage" : 60,
+        "miss_rate" : 0,
+        "min_health" : 200,
+        "max_health" : 200,
+        "health_regen" : 0,
+        "attack_time" : 5,
+        "regen_time" : 0,
+        "loot_avg" : 300
+    }
+}
