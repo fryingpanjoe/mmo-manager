@@ -8,7 +8,7 @@ def main():
     clock = pygame.time.Clock()
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('MMO Manager 2013')
-    game = Game(screen.get_width(), screen.get_height())
+    game = Game(screen)
     game.menu()
     while game.running:
         frame_time = min(clock.tick() / 1000.0, 0.1)

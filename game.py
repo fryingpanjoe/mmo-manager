@@ -4,6 +4,7 @@ from scheduling import Scheduler
 from rendering import Renderer
 from hud import Hud
 from world import World
+from menu import MenuState
 
 
 class EntityStore(object):
@@ -117,4 +118,5 @@ class Game(object):
             self.current_state.on_event(event)
 
     def update(self, screen, frame_time):
+        self.screen = screen
         self.current_state.update(screen, frame_time)
