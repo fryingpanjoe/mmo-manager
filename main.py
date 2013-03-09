@@ -1,11 +1,21 @@
+#!/usr/bin/python
+
+import sys
 import pygame
-from game import Game
+import logging.config
+
+from mm.config import Config
+from mm.game import Game
 
 
 def main():
     pygame.init()
     pygame.font.init()
     clock = pygame.time.Clock()
+
+    #config.load('mm.conf')
+    logging.config.fileConfig('logging.conf')
+
     screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('MMO Manager 2013')
     game = Game(screen)

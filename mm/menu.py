@@ -32,7 +32,7 @@ class MenuButtonTypes(object):
 class MenuState(object):
     def __init__(self, game, screen_width, screen_height, in_game=False):
         self.game = game
-        self.font = pygame.font.Font('font.ttf', 36)
+        self.font = pygame.font.Font('res/font.ttf', 36)
 
         button_descs = [
             (MenuButtonTypes.NEW_GAME, 'NEW GAME'),

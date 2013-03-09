@@ -1,10 +1,10 @@
 import pygame
 import json
-from scheduling import Scheduler
-from rendering import Renderer
-from hud import Hud
-from world import World
-from menu import MenuState
+from mm.scheduling import Scheduler
+from mm.rendering import Renderer
+from mm.hud import Hud
+from mm.world import World
+from mm.menu import MenuState
 
 
 class EntityStore(object):

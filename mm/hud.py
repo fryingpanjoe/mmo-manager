@@ -1,6 +1,6 @@
 import pygame
-from vec2 import vec2
-from world import Actor
+from thirdparty.vec2 import vec2
+from mm.world import Actor
 
 
 class MobIcon(object):

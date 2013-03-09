@@ -1,11 +1,13 @@
 import pygame
-from scheduling import Timer
-from vec2 import *
+import os.path
+from thirdparty.vec2 import *
+from mm.scheduling import Timer
+
 
 class Renderer(object):
     def __init__(self):
-        self.font = pygame.font.Font('font.ttf', 24)
-        self.small_font = pygame.font.Font('font.ttf', 18)
+        self.font = pygame.font.Font('res/font.ttf', 24)
+        self.small_font = pygame.font.Font('res/font.ttf', 18)
         self.image_cache = {}
         self.renderables = []
 
@@ -41,7 +43,8 @@ class Renderer(object):
         if filename in self.image_cache:
             return self.image_cache[filename]
         try:
-            image = pygame.image.load(filename).convert_alpha()
+            image = pygame.image.load(
+                os.path.join('res', filename)).convert_alpha()
             #if colorkey is not None:
             #    if colorkey is -1:
             #        colorkey = image.get_at((0,0))

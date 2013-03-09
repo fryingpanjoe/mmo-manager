@@ -1,8 +1,8 @@
 import pygame
 import random
 import functools
-from vec2 import *
-from scheduling import Timer
+from thirdparty.vec2 import *
+from mm.scheduling import Timer
 
 
 def get_random_position_inside(spawn_area):
