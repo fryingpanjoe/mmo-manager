@@ -1,7 +1,10 @@
+import logging
 import pygame
 import os.path
 from thirdparty.vec2 import *
 from mm.scheduling import Timer
+
+LOG = logging.getLogger(__name__)
 
 
 class Renderer(object):
@@ -51,8 +54,8 @@ class Renderer(object):
             #    image.set_colorkey(colorkey, pygame.RLEACCEL)
             return image
         except pygame.error as message:
-            print('Cannot load image:', filename)
-            raise(SystemExit())
+            LOG.warn('cannot load image: %s', filename)
+            raise
 
 
 class Text(object):

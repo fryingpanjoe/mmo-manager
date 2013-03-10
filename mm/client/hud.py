@@ -1,6 +1,6 @@
 import pygame
 from thirdparty.vec2 import vec2
-from mm.world import Actor
+from mm.common.world import Actor
 
 
 class MobIcon(object):
@@ -16,7 +16,12 @@ class MobIcon(object):
         self.actor.pos = vec2(self.bounds.centerx, self.bounds.centery)
         self.actor.draw(screen, True)
 
-        pygame.draw.rect(screen, (128, 128, 128) if selected else (224, 224, 224), self.bounds, 2)
+        if selected:
+            border_color = (128, 128, 128)
+        else:
+            border_color = (224, 224, 224)
+
+        pygame.draw.rect(screen, border_color, self.bounds, 2)
 
         if self.actor.is_player:
             other_rect = self.bounds.inflate(-8, -8)
@@ -38,16 +43,20 @@ class Hud(object):
         self.mob_store = mob_store
         self.world = world
         self.rendering = rendering
-        self.mob_icons = []
         self.coin_icon = self.rendering.load_image('coins.png')
+        self.mob_icons = []
 
     def generate_mob_icons(self, screen_width, screen_height):
-        self.mob_icons = []
         icon_width = MobIcon.WIDTH
         icon_height = MobIcon.HEIGHT
+
         available_mob_names = self.user.get_available_mob_names()
+
         x = (screen_width - icon_width * len(available_mob_names)) // 2
         y = (screen_height - icon_height - 10)
+
+        self.mob_icons = []
+
         for mob_name in available_mob_names:
             self.mob_icons.append(self.create_icon_for_mob(mob_name, (x, y)))
             x += icon_width + MobIcon.PADDING
