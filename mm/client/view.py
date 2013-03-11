@@ -2,33 +2,25 @@ import pygame
 import random
 import functools
 from thirdparty.vec2 import *
-from mm.scheduling import Timer
+from mm.common.events import *
+from mm.common.world import World
+from mm.common.scheduling import Timer
+
+class View(object):
+    def __init__(self, world):
+        self.__world = world
+
+    def handle_event(self, event):
+        if isinstance(event, EvActorSpawned):
+            self.__world.spawn_actor_at(
+                event.actor_type, event.pos, actor_id=event.actor_id)
 
 
-class ActorStore(object):
-    def __init__(self):
-        self.actors = {}
-
-    def load_from_file(self, filename):
-        with open(filename) as actor_file:
-            self.actors = json.load(actor_file)
-
-    def get_params(self, actor_type):
-        return self.actors[actor_type]
-
-    def get_all_names(self):
-        return self.actors.keys()
-
-
-def get_random_position_inside(spawn_area):
-    return vec2(random.uniform(spawn_area.left, spawn_area.right), random.uniform(spawn_area.top, spawn_area.bottom))
-
-
-class World(object):
-    def __init__(self, screen_width, screen_height, user, actor_store,
+class ClientWorld(World):
+    def __init__(self, screen_width, screen_height, user, entity_store,
                  renderer, scheduler):
         self.user = user
-        self.actor_store = actor_store
+        self.entity_store = entity_store
         self.renderer = renderer
         self.scheduler = scheduler
         self.width = screen_width
@@ -38,17 +30,17 @@ class World(object):
         self.spawn_area.inflate_ip(-self.width // 3, -self.height // 3)
         self.actors = []
 
-    def spawn_actor(self, actor_type, custom_spawn_area=None):
+    def spawn_actor(self, mob_type, custom_spawn_area=None):
         spawn_pos = get_random_position_inside(custom_spawn_area if custom_spawn_area else self.spawn_area)
         if self.is_valid_position(spawn_pos):
-            self.spawn_actor(actor_type, spawn_pos)
+            self.spawn_actor_at(mob_type, spawn_pos)
 
-    def spawn_actor(self, actor_type, pos):
-        actor = Actor(actor_type, self.actor_store.get_params(actor_type), pos, self, self.renderer)
+    def spawn_actor_at(self, mob_type, pos, actor_id=None):
+        actor = Actor(mob_type, self.entity_store.get_params(mob_type), pos, self, self.renderer)
         self.actors.append(actor)
         return actor
 
-    def spawn_player(self):
+    def add_player(self):
         pad = 64
         r0 = pygame.Rect(-pad, -pad, self.width + pad, pad)
         r1 = pygame.Rect(self.width, -pad, pad, self.height + pad)
@@ -66,7 +58,7 @@ class World(object):
         elif dice_roll < r1_prob: r = r1
         elif dice_roll < r2_prob: r = r2
         else: r = r3
-        player = self.spawn_actor('player', get_random_position_inside(r))
+        player = self.spawn_actor_at('player', get_random_position_inside(r))
         #player.set_destination(get_random_position_inside(self.spawn_area))
 
     def update(self, screen, frame_time):
@@ -82,69 +74,6 @@ class World(object):
     def on_death(self, actor):
         if actor.is_player:
             self.user.on_player_death(actor)
-        self.scheduler.post(functools.partial(self.actors.remove, actor), 30)
-
-
-class World(object):
-    def __init__(self, scheduler, actor_store, width, height):
-        self.scheduler = scheduler
-        self.actor_store = actor_store
-
-        self.width = width
-        self.height = height
-
-        self.bounds = pygame.Rect(0, 0, self.width, self.height)
-
-        self.spawn_area = pygame.Rect(0, 0, self.width, self.height)
-        self.spawn_area.inflate_ip(-self.width // 3, -self.height // 3)
-
-        self.actors = []
-
-    def spawn_actor(self, actor_type, pos):
-        actor = Actor(actor_type, self.actor_store.get_params(actor_type), pos, self, self.renderer)
-        self.actors.append(actor)
-        return actor
-
-    def spawn_player(self):
-        pad = 64.
-
-        r0 = pygame.Rect(-pad, -pad, self.width + pad, pad)
-        r1 = pygame.Rect(self.width, -pad, pad, self.height + pad)
-        r2 = pygame.Rect(0, self.height, self.width + pad, pad)
-        r3 = pygame.Rect(-pad, 0, pad, self.height + pad)
-
-        area_0 = float(self.width + pad) * pad
-        area_1 = float(self.height + pad) * pad
-
-        total_area = 2. * (area_0 + area_1)
-
-        r0_prob = (area_0 / total_area)
-        r1_prob = r0_prob + (area_1 / total_area)
-        r2_prob = r1_prob + (area_0 / total_area)
-        #r3_prob = r2_prob + (area_1 / total_area)
-
-        dice_roll = random.random()
-        if dice_roll < r0_prob: r = r0
-        elif dice_roll < r1_prob: r = r1
-        elif dice_roll < r2_prob: r = r2
-        else: r = r3
-
-        return self.spawn_actor('player', get_random_position_inside(r))
-
-    def update(self, frame_time):
-        for actor in self.actors:
-            actor.update(frame_time)
-
-    def find_nearby_actors(self, pos, search_radius):
-        for actor in self.actors:
-            if (not actor.is_dead() and
-                pos.get_distance(actor.pos) - actor.radius < search_radius):
-                yield actor
-
-    def is_valid_position(self, pos):
-        return self.bounds.collidepoint(pos.as_int_tuple())
-
-    def on_death(self, actor):
         self.scheduler.post(functools.partial(self.actors.remove, actor), 30)
 
 

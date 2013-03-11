@@ -84,17 +84,6 @@ class MenuState(object):
             button.draw(screen, highlight=button.is_intersecting(mouse_pos))
 
 
-class EntityStore(object):
-    def __init__(self, filename):
-        self.entity_types = json.load(open(filename, 'r'))
-
-    def get_params(self, mob):
-        return self.entity_types[mob]
-
-    def get_all_names(self):
-        return self.entity_types.keys()
-
-
 class User(object):
     def __init__(self, entity_store):
         self.score = 0
