@@ -6,12 +6,13 @@ from mm.common.events import *
 from mm.common.world import World
 from mm.common.scheduling import Timer
 
+
 class View(object):
     def __init__(self, world):
         self.__world = world
 
     def handle_event(self, event):
-        if isinstance(event, EvActorSpawned):
+        if isinstance(event, ActorSpawnedEvent):
             self.__world.spawn_actor_at(
                 event.actor_type, event.pos, actor_id=event.actor_id)
 
@@ -77,7 +78,7 @@ class ClientWorld(World):
         self.scheduler.post(functools.partial(self.actors.remove, actor), 30)
 
 
-class Actor(object):
+class ClientActor(Actor):
     def __init__(self, name, spawn_params, pos, world, renderer):
         self.name = name
         self.spawn_params = spawn_params
