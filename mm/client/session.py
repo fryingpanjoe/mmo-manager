@@ -1,9 +1,9 @@
 import pygame
 import json
-from mm.scheduling import Scheduler
-from mm.rendering import Renderer
-from mm.hud import Hud
-from mm.world import World
+from mm.common.scheduling import Scheduler
+from mm.common.world import World
+from mm.client.rendering import Renderer
+from mm.client.hud import Hud
 
 
 class MenuButton(object):
@@ -85,28 +85,28 @@ class MenuState(object):
 
 
 class User(object):
-    def __init__(self, entity_store):
+    def __init__(self, actor_store):
         self.score = 0
         self.max_simultaneous_players = 0
         self.current_player_count = 0
-        self.entity_store = entity_store
-        self.available_mob_names = [
-            name for name in self.entity_store.get_all_names()
+        self.actor_store = actor_store
+        self.available_actor_types = [
+            name for name in self.actor_store.get_all_names()
             if name != 'player']
-        self.selected_mob_name = self.available_mob_names[0]
+        self.selected_actor_type = self.available_actor_types[0]
 
-    def add_available_mob_name(self, mob_name):
-        self.available_mob_names.append(mob_name)
+    def add_available_actor_type(self, actor_type):
+        self.available_actor_types.append(actor_type)
 
-    def set_selected_mob_name(self, mob_name):
-        if mob_name in self.available_mob_names:
-            self.selected_mob_name = mob_name
+    def set_selected_actor_type(self, actor_type):
+        if actor_type in self.available_actor_types:
+            self.selected_actor_type = actor_type
 
-    def get_available_mob_names(self):
-        return self.available_mob_names
+    def get_available_actor_types(self):
+        return self.available_actor_types
 
-    def get_selected_mob_name(self):
-        return self.selected_mob_name
+    def get_selected_actor_type(self):
+        return self.selected_actor_type
 
     def on_loot(self, loot_value):
         self.score += loot_value // 10
@@ -125,15 +125,15 @@ class User(object):
 
 class PlayState(object):
     def __init__(self, game, screen_width, screen_height):
-        entity_store = EntityStore('entities.json')
+        actor_store = EntityStore('entities.json')
         self.game = game
         self.scheduler = Scheduler()
         self.renderer = Renderer()
-        self.user = User(entity_store)
+        self.user = User(actor_store)
         self.world = World(
-            screen_width, screen_height, self.user, entity_store,
+            screen_width, screen_height, self.user, actor_store,
             self.renderer, self.scheduler)
-        self.hud = Hud(self.user, entity_store, self.world, self.renderer)
+        self.hud = Hud(self.user, actor_store, self.world, self.renderer)
         self.hud.generate_mob_icons(screen_width, screen_height)
 
     def on_event(self, event):

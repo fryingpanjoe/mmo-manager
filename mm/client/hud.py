@@ -27,20 +27,20 @@ class MobIcon(object):
             other_rect = self.bounds.inflate(-8, -8)
             pygame.draw.rect(screen, (160, 160, 255), other_rect, 2)
 
-    def get_mob_name(self):
-        return self.actor.name
+    def get_actor_type(self):
+        return self.actor.actor_type
 
     def intersects(self, mouse_pos):
         return self.bounds.collidepoint(mouse_pos)
 
     def get_label(self):
-        return self.actor.name
+        return self.actor.actor_type
 
 
 class Hud(object):
-    def __init__(self, user, mob_store, world, rendering):
+    def __init__(self, user, actor_store, world, rendering):
         self.user = user
-        self.mob_store = mob_store
+        self.actor_store = actor_store
         self.world = world
         self.rendering = rendering
         self.coin_icon = self.rendering.load_image('coins.png')
@@ -50,20 +50,20 @@ class Hud(object):
         icon_width = MobIcon.WIDTH
         icon_height = MobIcon.HEIGHT
 
-        available_mob_names = self.user.get_available_mob_names()
+        available_actor_types = self.user.get_available_actor_types()
 
-        x = (screen_width - icon_width * len(available_mob_names)) // 2
+        x = (screen_width - icon_width * len(available_actor_types)) // 2
         y = (screen_height - icon_height - 10)
 
         self.mob_icons = []
 
-        for mob_name in available_mob_names:
-            self.mob_icons.append(self.create_icon_for_mob(mob_name, (x, y)))
+        for actor_type in available_actor_types:
+            self.mob_icons.append(self.create_icon_for_mob(actor_type, (x, y)))
             x += icon_width + MobIcon.PADDING
 
-    def create_icon_for_mob(self, mob_name, icon_pos):
-        params = self.mob_store.get_params(mob_name)
-        actor = Actor(mob_name, params, vec2(0, 0), self.world, self.rendering)
+    def create_icon_for_mob(self, actor_type, icon_pos):
+        params = self.actor_store.get_params(actor_type)
+        actor = ClientActor(actor_type, params, vec2(0, 0), self.world, self.rendering)
         return MobIcon(actor, icon_pos)
 
     def find_icon_at(self, mouse_pos):
@@ -76,12 +76,12 @@ class Hud(object):
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             clicked_icon = self.find_icon_at(pygame.mouse.get_pos())
             if clicked_icon:
-                self.user.set_selected_mob_name(clicked_icon.get_mob_name())
+                self.user.set_selected_actor_type(clicked_icon.get_actor_type())
             else:
                 spawn_pos = vec2(pygame.mouse.get_pos())
                 if self.world.is_valid_position(spawn_pos):
                     self.world.spawn_actor_at(
-                        self.user.get_selected_mob_name(), spawn_pos)
+                        self.user.get_selected_actor_type(), spawn_pos)
         elif event.type == pygame.MOUSEBUTTONUP and event.button == 2:
             self.world.add_player()
 
@@ -106,7 +106,7 @@ class Hud(object):
         for icon in self.mob_icons:
             icon.draw(
                 screen,
-                self.user.get_selected_mob_name() == icon.get_mob_name())
+                self.user.get_selected_actor_type() == icon.get_actor_type())
             if icon.intersects(pygame.mouse.get_pos()):
                 self.rendering.print_text(
                     (icon.bounds.centerx, icon.bounds.top - 10),
