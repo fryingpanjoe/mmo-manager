@@ -66,7 +66,7 @@ def main():
 
         LOG.info('game shutdown')
     except Exception:
-        logging.exception('game crashed :-(')
+        LOG.exception('game crashed :-(')
 
 
 if __name__ == '__main__':

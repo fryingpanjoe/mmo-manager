@@ -196,7 +196,7 @@ class ClientActor(Actor):
         self.renderer.combat_text(self.pos, loot_text, (192, 0, 192), False)
 
     def shoot_at_target(self):
-        if self.attack_timer.is_expired_then_reset():
+        if self.attack_timer.is_is_expired_then_reset():
             if random.random() > self.miss_rate:
                 self.target.take_damage(
                     int(random.uniform(*self.damage_range)), self)
@@ -221,7 +221,7 @@ class ClientActor(Actor):
         return self.health <= 0
 
     def wander(self):
-        if (self.wander_timer.expired() or
+        if (self.wander_timer.is_expired() or
             self.pos.get_distance(self.move_dest) < self.radius):
             self.wander_timer.reset()
             self.set_random_destination()
@@ -248,7 +248,7 @@ class ClientActor(Actor):
 
         self.move(frame_time)
 
-        if self.health_timer.is_expired_then_reset() and self.health < self.max_health and not self.target:
+        if self.health_timer.is_is_expired_then_reset() and self.health < self.max_health and not self.target:
             health_increase = self.health_regen
             self.health = min(self.health + health_increase, self.max_health)
             if self.is_player:

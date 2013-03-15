@@ -29,17 +29,24 @@ class Timer(object):
             self.min_duration = duration
             self.max_duration = None
 
+        self.time_left = 0
+
         if do_reset:
             self.reset()
-        else:
-            self.time_left = 0
 
     def update(self, frame_time):
         self.time_left -= frame_time
-        return not self.expired()
+        return not self.is_expired()
 
-    def expired(self):
+    def is_expired(self):
         return self.time_left <= 0
+
+    def is_expired_then_reset(self):
+        if self.is_expired():
+            self.reset()
+            return True
+        else:
+            return False
 
     def reset(self, time_left=None):
         if time_left:
@@ -53,10 +60,3 @@ class Timer(object):
 
     def fforward(self):
         self.time_left = 0
-
-    def is_expired_then_reset(self):
-        if self.expired():
-            self.reset()
-            return True
-        else:
-            return False

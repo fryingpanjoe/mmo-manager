@@ -1,6 +1,6 @@
 {
-    "player" : {
-        "type" : "player",
+    "hero" : {
+        "type" : "hero",
         "color" : [0, 0, 192],
         "speed" : 25,
         "radius" : 8,

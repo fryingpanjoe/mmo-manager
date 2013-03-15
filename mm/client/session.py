@@ -87,16 +87,13 @@ class MenuState(object):
 class User(object):
     def __init__(self, actor_store):
         self.score = 0
-        self.max_simultaneous_players = 0
-        self.current_player_count = 0
+        self.max_simultaneous_heroes = 0
+        self.current_hero_count = 0
         self.actor_store = actor_store
         self.available_actor_types = [
             name for name in self.actor_store.get_all_names()
-            if name != 'player']
+            if name != 'hero']
         self.selected_actor_type = self.available_actor_types[0]
-
-    def add_available_actor_type(self, actor_type):
-        self.available_actor_types.append(actor_type)
 
     def set_selected_actor_type(self, actor_type):
         if actor_type in self.available_actor_types:
@@ -111,21 +108,21 @@ class User(object):
     def on_loot(self, loot_value):
         self.score += loot_value // 10
 
-    def on_player_death(self, p):
+    def on_hero_death(self, p):
         self.score -= 10
 
-    def on_player_enter(self, p):
-        self.current_player_count += 1
-        if self.current_player_count > self.max_simultaneous_players:
-            self.current_player_count = self.max_simultaneous_players
+    def on_hero_spawned(self, p):
+        self.current_hero_count += 1
+        if self.current_hero_count > self.max_simultaneous_heroes:
+            self.current_hero_count = self.max_simultaneous_heroes
 
-    def on_player_leave(self, p):
-        self.current_player_count -= 1
+    def on_hero_leave(self, p):
+        self.current_hero_count -= 1
 
 
 class PlayState(object):
     def __init__(self, game, screen_width, screen_height):
-        actor_store = EntityStore('entities.json')
+        actor_store = ActorStore('actors.json')
         self.game = game
         self.scheduler = Scheduler()
         self.renderer = Renderer()
@@ -149,43 +146,43 @@ class PlayState(object):
 
 class Session(object):
     def __init__(self, screen):
-        self.__screen = screen
-        self.__running = True
-        self.__current_state = None
-        self.__previous_state = None
-        self.__ingame = False
+        self.screen = screen
+        self.is_running = True
+        self.current_state = None
+        self.previous_state = None
+        self.ingame = False
 
     def is_running(self):
-        return self.__running
+        return self.is_running
 
     def menu(self):
-        self.__previous_state = self.__current_state
-        self.__current_state = MenuState(
-            self, self.__screen.get_width(), self.__screen.get_height(),
-            ingame=self.__ingame)
+        self.previous_state = self.current_state
+        self.current_state = MenuState(
+            self, self.screen.get_width(), self.screen.get_height(),
+            ingame=self.ingame)
 
     def new_game(self):
-        self.__ingame = True
-        self.__previous_state = MenuState(
-            self, self.__screen.get_width(), self.__screen.get_height(),
-            ingame=self.__ingame)
-        self.__current_state = PlayState(
-            self, self.__screen.get_width(), self.__screen.get_height())
+        self.ingame = True
+        self.previous_state = MenuState(
+            self, self.screen.get_width(), self.screen.get_height(),
+            ingame=self.ingame)
+        self.current_state = PlayState(
+            self, self.screen.get_width(), self.screen.get_height())
 
     def go_back(self):
-        old = self.__current_state
-        self.__current_state = self.__previous_state
-        self.__previous_state = old
+        old = self.current_state
+        self.current_state = self.previous_state
+        self.previous_state = old
 
     def quit(self):
-        self.__running = False
+        self.is_running = False
 
     def on_event(self, event):
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
             self.go_back()
         else:
-            self.__current_state.on_event(event)
+            self.current_state.on_event(event)
 
     def update(self, screen, frame_time):
-        self.__screen = screen
-        self.__current_state.update(screen, frame_time)
+        self.screen = screen
+        self.current_state.update(screen, frame_time)
