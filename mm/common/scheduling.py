@@ -58,4 +58,5 @@ class Timer(object):
         if self.expired():
             self.reset()
             return True
-        return False
+        else:
+            return False
