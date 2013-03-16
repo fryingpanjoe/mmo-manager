@@ -1,3 +1,12 @@
+import pickle
+
+
+def write_event(event):
+    return pickle.dumps(event)
+
+
+def read_event(string):
+    return pickle.loads(string)
 
 
 class ActorSpawnedEvent(object):
