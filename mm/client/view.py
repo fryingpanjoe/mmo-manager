@@ -1,280 +1,177 @@
-import pygame
+import logging
 import random
 import functools
+
+import pygame
+
 from thirdparty.vec2 import *
 from mm.common.events import *
 from mm.common.world import World
 from mm.common.scheduling import Timer
 
-
-class View(object):
-    def __init__(self, world):
-        self.__world = world
-
-    def handle_event(self, event):
-        if isinstance(event, ActorSpawnedEvent):
-            self.__world.spawn_actor_at(
-                event.actor_type, event.pos, actor_id=event.actor_id)
+LOG = logging.getLogger(__name__)
 
 
-class ClientWorld(World):
-    def __init__(self, screen_width, screen_height, user, entity_store,
-                 renderer, scheduler):
-        self.user = user
-        self.entity_store = entity_store
-        self.renderer = renderer
+class ClientWorld(object):
+    def __init__(self, event_distributor, scheduler, renderer, actor_store,
+                 width, height):
+        self.event_distributor = event_distributor
         self.scheduler = scheduler
-        self.width = screen_width
-        self.height = screen_height
-        self.bounds = pygame.Rect(0, 0, self.width, self.height)
-        self.spawn_area = pygame.Rect(0, 0, self.width, self.height)
-        self.spawn_area.inflate_ip(-self.width // 3, -self.height // 3)
+        self.renderer = renderer
+        self.actor_store = actor_store
+        self.width = width
+        self.height = height
         self.actors = []
+        self.client_actors = {}
 
-    def spawn_actor(self, mob_type, custom_spawn_area=None):
-        spawn_pos = get_random_position_inside(custom_spawn_area if custom_spawn_area else self.spawn_area)
-        if self.is_valid_position(spawn_pos):
-            self.spawn_actor_at(mob_type, spawn_pos)
+        self.event_distributor.add_handler(self.on_enter_game, EnterGameEvent)
+        self.event_distributor.add_handler(self.on_delta_state, DeltaStateEvent)
+        self.event_distributor.add_handler(self.on_actor_spawned, ActorSpawnedEvent)
+        self.event_distributor.add_handler(self.on_actor_died, ActorDiedEvent)
+        self.event_distributor.add_handler(self.on_attack, AttackEvent)
+        self.event_distributor.add_handler(self.on_heal, HealEvent)
+        self.event_distributor.add_handler(self.on_loot, LootEvent)
+        self.event_distributor.add_handler(self.on_set_target, SetTargetEvent)
 
-    def spawn_actor_at(self, mob_type, pos, actor_id=None):
-        actor = Actor(mob_type, self.entity_store.get_params(mob_type), pos, self, self.renderer)
-        self.actors.append(actor)
-        return actor
+    def find_actor(self, actor_id):
+        for actor in self.actors:
+            if actor.actor_id == actor_id:
+                return actor
+        return None
 
-    def add_player(self):
-        pad = 64
-        r0 = pygame.Rect(-pad, -pad, self.width + pad, pad)
-        r1 = pygame.Rect(self.width, -pad, pad, self.height + pad)
-        r2 = pygame.Rect(0, self.height, self.width + pad, pad)
-        r3 = pygame.Rect(-pad, 0, pad, self.height + pad)
-        area_0 = (self.width + pad) * pad
-        area_1 = (self.height + pad) * pad
-        total_area = 2 * (area_0 + area_1)
-        r0_prob = (area_0 / total_area)
-        r1_prob = r0_prob + (area_1 / total_area)
-        r2_prob = r1_prob + (area_0 / total_area)
-        #r3_prob = r2_prob + (area_1 / total_area)
-        dice_roll = random.random()
-        if dice_roll < r0_prob: r = r0
-        elif dice_roll < r1_prob: r = r1
-        elif dice_roll < r2_prob: r = r2
-        else: r = r3
-        player = self.spawn_actor_at('player', get_random_position_inside(r))
-        #player.set_destination(get_random_position_inside(self.spawn_area))
+    def on_enter_game(self, event):
+        self.actors = event.actors
+
+    def on_delta_state(self, event):
+        for actor in event.actors:
+            local_actor = self.find_actor(actor.actor_id)
+            if local_actor:
+                local_actor.__dict__.update(actor.__dict__)
+
+    def on_actor_spawned(self, event):
+        local_actor = self.find_actor(event.actor.actor_id)
+        if local_actor:
+            LOG.error(
+                'Spawned actor already exists: id=%d', event.actor.actor_id)
+        else:
+            self.actors.append(event.actor)
+            self.client_actors[event.actor.actor_id] = ClientActor(
+                actor, self.actor_store.get_params(actor.actor_type),
+                self.renderer)
+
+    def on_actor_died(self, event):
+        # keep body around for a little while
+        self.scheduler.post(
+            functools.partial(self.remove_client_actor, event.actor_id), 30)
+
+    def remove_client_actor(self, actor_id):
+        del self.client_actors[actor_id]
+
+    def on_attack(self, event):
+        attacker = self.find_actor(event.attacker_id)
+        victim = self.find_actor(event.victim_id)
+
+        if attacker.is_hero:
+            damage_color = (255, 64, 0)
+        else:
+            damage_color = (255, 0, 0)
+
+        self.renderer.visualize_attack(attacker.pos, victim.pos, damage_color)
+
+        if event.damage == 0:
+            self.renderer.small_combat_text(
+                attacker.pos, 'MISS', (192, 192, 192))
+        else:
+            if victim.is_hero:
+                damage = -event.damage
+                text_color = (255, 32, 32)
+            else:
+                damage = event.damage
+                text_color = (64, 128, 255)
+
+            self.renderer.combat_text(victim.pos, str(damage), text_color)
+
+    def on_heal(self, event):
+        local_actor = self.find_actor(event.actor_id)
+        if local_actor:
+            if local_actor.is_hero:
+                self.renderer.small_combat_text(
+                    local_actor.pos, '+' + str(event.heal), (64, 192, 32))
+
+    def on_loot(self, event):
+        local_actor = self.find_actor(event.actor_id)
+        if local_actor:
+            self.renderer.combat_text(
+                local_actor.pos, '+' + str(event.loot), (192, 0, 192), False)
+
+    def on_set_target(self, event):
+        #local_actor = self.find_actor(event.actor_id)
+        #if event.target_id:
+        #    self.renderer.combat_text(local_actor.pos, '!', (255, 192, 64))
+        pass
 
     def update(self, screen, frame_time):
-        for a in self.actors:
-            a.update(screen, frame_time)
-
-    def find_nearby_actors(self, pos, search_radius):
-        return [ a for a in self.actors if pos.get_distance(a.pos) - a.radius < search_radius if not a.is_dead() ]
-
-    def is_valid_position(self, pos):
-        return self.bounds.collidepoint(pos.as_int_tuple())
-
-    def on_death(self, actor):
-        if actor.is_player:
-            self.user.on_player_death(actor)
-        self.scheduler.post(functools.partial(self.actors.remove, actor), 30)
+        for client_actor in self.client_actors.itervalues():
+            client_actor.update(screen, frame_time)
 
 
-class ClientActor(Actor):
-    def __init__(self, name, spawn_params, pos, world, renderer):
-        self.name = name
-        self.spawn_params = spawn_params
-        self.pos = pos
-        self.world = world
-        self.renderer = renderer
+class ClientActor(object):
+    def __init__(self, actor, spawn_params, renderer):
+        self.actor = actor
 
-        self.is_player = self.name == 'player'
-
-        if 'image' in self.spawn_params:
-            self.image = self.renderer.load_image(self.spawn_params['image'])
+        if 'image' in spawn_params:
+            self.image = self.renderer.load_image(spawn_params['image'])
         else:
             self.image = None
-        if 'image_dead' in self.spawn_params:
+        if 'image_dead' in spawn_params:
             self.image_dead = self.renderer.load_image(
-                self.spawn_params['image_dead'])
+                spawn_params['image_dead'])
         else:
             self.image_dead = None
 
-        self.color = tuple(self.spawn_params.get('color', (0, 0, 0)))
-        self.speed = self.spawn_params.get('speed', 1)
-        self.radius = self.spawn_params.get('radius', 1)
-
-        min_range = self.spawn_params.get('min_range', self.radius)
-        max_range = self.spawn_params.get('max_range', min_range)
-        self.attack_range = int(random.uniform(min_range, max_range))
-
-        default_threat_range = 1.5 * self.attack_range
-        threat_range = self.spawn_params.get(
-            'threat_range', default_threat_range)
-        self.threat_range = max(self.radius, threat_range)
-
-        min_damage = max(0, self.spawn_params.get('min_damage', 0))
-        max_damage = self.spawn_params.get('max_damage', min_damage)
-        self.damage_range = (min_damage, max_damage)
-
-        min_health = max(1, self.spawn_params.get('min_health', 1))
-        max_health = self.spawn_params.get('max_health', min_health)
-        self.max_health = int(random.uniform(min_health, max_health))
-        self.health = self.max_health
-
-        self.health_regen = self.spawn_params.get('health_regen', 0)
-
-        self.wander_timer = Timer((1, 4), False)
-        self.attack_timer = Timer(
-            self.spawn_params.get('attack_time', 2), False)
-        self.health_timer = Timer(self.spawn_params.get('regen_time', 2), False)
-
-        self.wander_radius = 100
-
-        self.miss_rate = self.spawn_params.get('miss_rate', 0.1)
-
-        loot_avg = self.spawn_params.get('loot_avg', 10)
-        loot_var = self.spawn_params.get('loot_var', loot_avg / 5)
-        if self.is_player:
-            self.loot_value = 0
-        else:
-            self.loot_value = max(1, int(random.gauss(loot_avg, loot_var)))
-
-        self.target = None
-        self.move_dest = vec2(0, 0)
-
-        self.set_random_destination()
-
-    def set_destination(self, pos, timeout=30):
-        self.wander_timer.reset(timeout)
-        self.move_dest = pos
-
-    def set_random_destination(self):
-        angle = random.random() * 2. * math.pi
-        dx = math.cos(angle) * self.wander_radius
-        dy = math.sin(angle) * self.wander_radius
-        self.move_dest = self.pos + vec2(dx, dy)
-
-    def attack_or_wander(self):
-        if self.health > self.max_health / 2:
-            nearby_enemies = list(self.find_nearby_enemies())
-            if len(nearby_enemies) > 0:
-                self.set_target(random.choice(nearby_enemies))
-            else:
-                self.wander()
-        else:
-            self.wander()
-
-    def find_nearby_enemies(self):
-        for actor in self.world.find_nearby_actors(self.pos, self.threat_range):
-            if actor.is_player != self.is_player:
-                yield actor
-
-    def is_in_range(self, other, max_range):
-        return (self.pos.get_distance(other.pos) - other.radius) < max_range
-
-    def take_damage(self, damage, instigator):
-        self.health -= damage
-
-        if (not self.target or
-            not self.is_in_range(self.target, self.attack_range)):
-            self.set_target(instigator)
-
-        if self.is_player:
-            damage = -damage
-            text_color = (255, 32, 32)
-        else:
-            text_color = (64, 128, 255)
-        self.renderer.combat_text(self.pos, str(damage), text_color)
-
-    def set_target(self, other):
-        self.target = other
-        #if self.target:
-        #    self.renderer.combat_text(self.pos, '!', (255, 192, 64))
-
-    def reward(self, loot):
-        self.loot_value += loot
-        loot_text = '+%d' % (self.target.loot_value)
-        self.renderer.combat_text(self.pos, loot_text, (192, 0, 192), False)
-
-    def shoot_at_target(self):
-        if self.attack_timer.is_is_expired_then_reset():
-            if random.random() > self.miss_rate:
-                self.target.take_damage(
-                    int(random.uniform(*self.damage_range)), self)
-
-                if self.is_player:
-                    damage_color = (255, 64, 0)
-                else:
-                    damage_color = (255, 0, 0)
-
-                self.renderer.visualize_attack(
-                    self.pos, self.target.pos, damage_color)
-
-                if self.target.is_dead():
-                    if self.is_player:
-                        self.reward(self.target.loot_value)
-                    self.world.on_death(self.target)
-            else:
-                self.renderer.small_combat_text(
-                    self.pos, 'MISS', (192, 192, 192))
-
-    def is_dead(self):
-        return self.health <= 0
-
-    def wander(self):
-        if (self.wander_timer.is_expired() or
-            self.pos.get_distance(self.move_dest) < self.radius):
-            self.wander_timer.reset()
-            self.set_random_destination()
-            while not self.world.is_valid_position(self.move_dest):
-                self.set_random_destination()
-
-    def think(self, frame_time):
-        self.wander_timer.update(frame_time)
-        self.attack_timer.update(frame_time)
-        self.health_timer.update(frame_time)
-
-        if self.target:
-            if self.target.is_dead():
-                # or not self.is_in_range(self.target, self.threat_range):
-                self.set_target(None)
-                self.set_random_destination()
-            elif self.is_in_range(self.target, self.attack_range):
-                self.move_dest = self.pos
-                self.shoot_at_target()
-            else:
-                self.move_dest = self.target.pos
-        else:
-            self.attack_or_wander()
-
-        self.move(frame_time)
-
-        if self.health_timer.is_is_expired_then_reset() and self.health < self.max_health and not self.target:
-            health_increase = self.health_regen
-            self.health = min(self.health + health_increase, self.max_health)
-            if self.is_player:
-                self.renderer.small_combat_text(self.pos, '+' + str(health_increase), (64, 192, 32))
-
-    def move(self, frame_time):
-        delta = self.move_dest - self.pos
-        distance = delta.normalize_return_length()
-        time = min(self.speed * frame_time, distance)
-        self.pos += time * delta
-
-    def update(self, screen, frame_time):
-        if not self.is_dead():
-            self.think(frame_time)
-        self.draw(screen)
+        self.color = tuple(spawn_params.get('color', (0, 0, 0)))
 
     def draw(self, screen, icon=False):
-        if self.image is not None:
-            if self.is_dead() and self.image_dead is not None:
-                screen.blit(self.image_dead, self.image_dead.get_rect(center=self.pos.as_int_tuple()))
+        pos_tuple = self.actor.pos.as_int_tuple()
+
+        if self.image:
+            if self.actor.is_dead() and self.image_dead:
+                image = self.image_dead
             else:
-                screen.blit(self.image, self.image.get_rect(center=self.pos.as_int_tuple()))
+                image = self.image
+
+        if image:
+            # draw image
+            screen.blit(image, self.image_dead.get_rect(center=pos_tuple))
         else:
-            pygame.draw.circle(screen, self.color if not self.is_dead() else (128, 128, 128), self.pos.as_int_tuple(), self.radius, 2 if self.is_player else 0)
+            # draw circle
+            if self.actor.is_alive():
+                color = self.color
+            else:
+                color = (128, 128, 128)
+
+            if self.actor.is_hero:
+                border_thickness = 2
+            else:
+                border_thickness = 0
+
+            pygame.draw.circle(
+                screen, color, self.actor.pos.as_int_tuple(), self.actor.radius,
+                border_thickness)
+
         if not icon:
-            if not self.is_dead():
-                pygame.draw.circle(screen, (192, 192, 192), self.pos.as_int_tuple(), int(self.attack_range), 1)
-                pygame.draw.circle(screen, (224, 224, 224), self.pos.as_int_tuple(), int(self.threat_range), 1)
-                self.renderer.draw_health_bar(screen, self.pos, self.health, self.max_health)
+            if self.actor.is_alive():
+                # attack range
+                pygame.draw.circle(
+                    screen, (192, 192, 192), pos_tuple,
+                    int(self.actor.attack_range), 1)
+
+                # threat range
+                pygame.draw.circle(
+                    screen, (224, 224, 224), pos_tuple,
+                    int(self.actor.threat_range), 1)
+
+                # health bar
+                self.renderer.draw_health_bar(
+                    screen, self.actor.pos, self.actor.health,
+                    self.actor.max_health)

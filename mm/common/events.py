@@ -1,12 +1,40 @@
 import pickle
 
 
-def write_event(event):
+def serialize_event_to_string(event):
     return pickle.dumps(event)
 
 
-def read_event(string):
+def serialize_event_from_string(string):
     return pickle.loads(string)
+
+
+class ClientEvent(object):
+    def __init__(self, client_id, event):
+        self.client_id = client_id
+        self.event = event
+
+
+class ClientConnectedEvent(object):
+    def __init__(self, client_id):
+        self.client_id = client_id
+
+
+class ClientDisconnectedEvent(object):
+    def __init__(self, client_id):
+        self.client_id = client_id
+
+
+class EnterGameEvent(object):
+    def __init__(self, width, height, actors):
+        self.width = width
+        self.height = height
+        self.actors = actors
+
+
+class DeltaStateEvent(object):
+    def __init__(self, actors):
+        self.actors = actors
 
 
 class ActorSpawnedEvent(object):
@@ -24,13 +52,6 @@ class AttackEvent(object):
         self.attacker_id = attacker_id
         self.victim_id = victim_id
         self.damage = damage
-
-
-class DamageEvent(object):
-    def __init__(self, attacker_id, victim_id, damage):
-        self.attacker_id = attacker_id
-        self.victim_id = victim_id
-        self.damage = damage # miss if damage is 0
 
 
 class HealEvent(object):
@@ -52,9 +73,17 @@ class SetTargetEvent(object):
         self.previous_target_id = previous_target_id
 
 
-ALL_EVENT_TYPES = (
-    ActorSpawnedEvent, ActorDiedEvent, AttackEvent, DamageEvent, HealEvent,
-    LootEvent, SetTargetEvent)
+ALL_GAME_EVENT_TYPES = [
+    ActorSpawnedEvent, ActorDiedEvent, AttackEvent, HealEvent, LootEvent,
+    SetTargetEvent]
+
+ALL_SERVER_EVENT_TYPES = [
+    ClientEvent, ClientConnectedEvent, ClientDisconnectedEvent]
+
+ALL_EVENT_TYPES = \
+    ALL_GAME_EVENT_TYPES + \
+    ALL_SERVER_EVENT_TYPES + \
+    [EnterGameEvent, DeltaStateEvent]
 
 
 class EventDistributor(object):
@@ -64,6 +93,9 @@ class EventDistributor(object):
         self.queue = []
 
     def add_handler(self, handler, event_types):
+        if not isinstance(event_types, (list, tuple)):
+            event_types = [event_types]
+
         self.handler_id += 1
         handler_id = self.handler_id
         self.handlers[handler_id] = (handler, event_types)

@@ -1,9 +1,16 @@
+import logging
 import pygame
-import json
+
 from mm.common.scheduling import Scheduler
 from mm.common.world import World
+from mm.common.networking import GAME_NETWORK_PORT
+from mm.common.events import *
 from mm.client.rendering import Renderer
 from mm.client.hud import Hud
+from mm.client.view import ClientWorld
+from mm.client.client import Client
+
+LOG = logging.getLogger(__name__)
 
 
 class MenuButton(object):
@@ -30,20 +37,27 @@ class MenuButton(object):
 
 class MenuButtonTypes(object):
     CONTINUE = 0
-    NEW_GAME = 1
-    QUIT = 2
+    DISCONNECT = 1
+    SINGLEPLAYER = 2
+    MULTIPLAYER = 3
+    QUIT = 4
 
 
 class MenuState(object):
-    def __init__(self, game, screen_width, screen_height, ingame=False):
-        self.game = game
+    def __init__(self, session, screen_width, screen_height, playing=False,
+                 multiplayer=False):
+        self.session = session
         self.font = pygame.font.Font('res/font.ttf', 36)
 
         button_descs = [
-            (MenuButtonTypes.NEW_GAME, 'NEW GAME'),
+            (MenuButtonTypes.SINGLEPLAYER, 'SINGLEPLAYER'),
+            (MenuButtonTypes.MULTIPLAYER, 'MULTIPLAYER'),
             (MenuButtonTypes.QUIT, 'QUIT')]
 
-        if ingame:
+        if multiplayer:
+            button_descs.append((MenuButtonTypes.DISCONNECT, 'DISCONNECT'))
+
+        if playing:
             button_descs.append((MenuButtonTypes.CONTINUE, 'CONTINUE'))
 
         button_width = screen_width // 4
@@ -70,12 +84,15 @@ class MenuState(object):
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             for button in self.buttons:
                 if button.is_intersecting(pygame.mouse.get_pos()):
-                    if button.button_id == MenuButtonTypes.NEW_GAME:
-                        self.game.new_game()
+                    if button.button_id == MenuButtonTypes.SINGLEPLAYER:
+                        self.session.singleplayer_game()
+                    if button.button_id == MenuButtonTypes.MULTIPLAYER:
+                        self.session.multiplayer_game(
+                            'localhost', GAME_NETWORK_PORT)
                     elif button.button_id == MenuButtonTypes.CONTINUE:
-                        self.game.go_back()
+                        self.session.return_to_game()
                     elif button.button_id == MenuButtonTypes.QUIT:
-                        self.game.quit()
+                        self.session.quit()
 
     def update(self, screen, frame_time):
         screen.fill((255, 255, 255))
@@ -120,10 +137,50 @@ class User(object):
         self.current_hero_count -= 1
 
 
-class PlayState(object):
+class MultiplayerState(object):
+    def __init__(self, session, client, event_distributor, scheduler, renderer,
+                 actor_store):
+        self.session = session
+        self.client = client
+        self.event_distributor = event_distributor
+        self.scheduler = scheduler
+        self.renderer = renderer
+        self.actor_store = actor_store
+
+        self.user = User(self.actor_store)
+
+        self.hud = Hud(self.user, self.actor_store, self.world, self.renderer)
+        self.hud.generate_mob_icons(screen_width, screen_height)
+
+        self.event_distributor.add_handler(
+            self.on_client_disconnected, ClientDisconnectedEvent)
+
+        self.client_world = ClientWorld(
+            event_distributor, scheduler, renderer, actor_store, 800, 600)
+
+    def on_event(self, event):
+        self.hud.on_event(event)
+
+    def update(self, screen, frame_time):
+        self.scheduler.update(frame_time)
+
+        screen.fill((255, 255, 255))
+        self.world.update(screen, frame_time)
+        self.hud.update(screen, frame_time)
+        self.renderer.update(screen, frame_time)
+
+    def on_client_disconnected(self, event):
+        if event.client_id == 0:
+            LOG.info('Disconnected from server')
+            self.session.menu()
+        else:
+            LOG.info('Client %d disconnected', event.client_id)
+
+"""
+class SingleplayerState(object):
     def __init__(self, game, screen_width, screen_height):
         actor_store = ActorStore('actors.json')
-        self.game = game
+        self.session = game
         self.scheduler = Scheduler()
         self.renderer = Renderer()
         self.user = User(actor_store)
@@ -142,37 +199,60 @@ class PlayState(object):
         self.world.update(screen, frame_time)
         self.hud.update(screen, frame_time)
         self.renderer.update(screen, frame_time)
-
+"""
 
 class Session(object):
     def __init__(self, screen):
         self.screen = screen
         self.is_running = True
+        self.menu_state = None
+        self.play_state = None
         self.current_state = None
-        self.previous_state = None
-        self.ingame = False
-
-    def is_running(self):
-        return self.is_running
 
     def menu(self):
-        self.previous_state = self.current_state
-        self.current_state = MenuState(
-            self, self.screen.get_width(), self.screen.get_height(),
-            ingame=self.ingame)
+        if self.play_state:
+            playing = True
+            multiplayer = isinstance(self.play_state, MultiplayerState)
+        else:
+            playing = False
+            multiplayer = False
 
-    def new_game(self):
-        self.ingame = True
-        self.previous_state = MenuState(
+        self.menu_state = MenuState(
             self, self.screen.get_width(), self.screen.get_height(),
-            ingame=self.ingame)
-        self.current_state = PlayState(
-            self, self.screen.get_width(), self.screen.get_height())
+            playing=playing, multiplayer=multiplayer)
+
+        self.current_state = self.menu_state
+
+    def singleplayer_game(self):
+        pass
+
+    def multiplayer_game(self, address, port):
+        event_distributor = EventDistributor()
+        client = Client(event_distributor)
+
+        if client.connect(address, port):
+            self.play_state = MultiplayerState(
+                self, client, event_distributor,
+                self.screen.get_width(), self.screen.get_height())
+
+            self.current_state = self.play_state
+
+    def return_to_game(self):
+        if self.play_state:
+            self.current_state = self.play_state
 
     def go_back(self):
-        old = self.current_state
-        self.current_state = self.previous_state
-        self.previous_state = old
+        if self.current_state == self.play_state:
+            self.current_state = self.menu_state
+        else:
+            self.current_state = self.play_state
+
+    def disconnect(self):
+        if self.play_state:
+            self.play_state.on_disconnect()
+            self.play_state = None
+
+        self.menu()
 
     def quit(self):
         self.is_running = False

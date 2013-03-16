@@ -2,6 +2,7 @@
 
 import logging
 import logging.config
+
 import pygame
 
 from mm.client.session import Session
@@ -12,6 +13,11 @@ LOG = logging.getLogger(__name__)
 WINDOW_TITLE = 'MMO Manager 2013'
 
 
+class ClientEventHandler(object):
+    def __init__(self, game):
+        self.game = game
+
+
 def main():
     logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
 
@@ -19,10 +25,12 @@ def main():
         config = Config()
         config.load('mm.conf')
 
-        LOG.info('initializing pygame')
+        LOG.info('Initializing game')
+
+        LOG.info('...initializing pygame')
         pygame.init()
 
-        LOG.info('initializing pygame.font')
+        LOG.info('...initializing pygame.font')
         pygame.font.init()
 
         try:
@@ -32,12 +40,12 @@ def main():
             screen_width = 800
             screen_height = 600
 
-        LOG.info('setting display mode %d x %d', screen_width, screen_height)
+        LOG.info('...setting display mode %d x %d', screen_width, screen_height)
         screen = pygame.display.set_mode((screen_width, screen_height))
 
         pygame.display.set_caption(WINDOW_TITLE)
 
-        LOG.info('initializing game')
+        LOG.info('...initializing game')
         session = Session(screen)
         session.menu()
 
@@ -51,9 +59,9 @@ def main():
         except KeyError:
             max_fps = 60.
 
-        LOG.info('maximum fps %.2f', max_fps)
+        LOG.info('Maximum FPS %.2f', max_fps)
 
-        while session.is_running():
+        while session.is_running:
             frame_time = min(clock.tick() / 1000.0, 1.0 / max_fps)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -64,9 +72,11 @@ def main():
             session.update(screen, frame_time)
             pygame.display.flip()
 
-        LOG.info('game shutdown')
+        LOG.info('Normal game shutdown')
     except Exception:
-        LOG.exception('game crashed :-(')
+        LOG.exception('Game crashed :-(')
+
+    LOG.info('Shutting down game')
 
 
 if __name__ == '__main__':

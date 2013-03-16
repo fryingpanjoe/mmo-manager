@@ -1,10 +1,16 @@
-import pygame
+import logging
 import random
 import math
 import json
-import functools
+
+import pygame
+
 from thirdparty.vec2 import vec2
-from mm.scheduling import Timer
+
+from mm.common.scheduling import Timer
+from mm.common.events import *
+
+LOG = logging.getLogger(__name__)
 
 
 class ActorStore(object):
@@ -162,8 +168,12 @@ class World(object):
         self.event_distributor.post(HealEvent(actor.actor_id, heal))
 
     def on_set_target(self, actor, target):
+        if target:
+            target_id = target.actor_id
+        else:
+            target_id = 0
         self.event_distributor.post(
-            SetTargetEvent(actor.actor_id, target.actor_id))
+            SetTargetEvent(actor.actor_id, target_id))
 
     def on_loot(self, actor, loot):
         self.event_distributor.post(LootEvent(actor.actor_id, loot))
@@ -245,7 +255,7 @@ class Actor(object):
 
         if (not self.target or
             not self.is_in_range(self.target, self.attack_range)):
-            self.set_target(instigator)
+            self.set_target(attacker)
 
     def set_target(self, other):
         self.target = other
@@ -273,6 +283,9 @@ class Actor(object):
 
     def is_dead(self):
         return self.health <= 0
+
+    def is_alive(self):
+        return self.health > 0
 
     def wander(self):
         if (self.wander_timer.is_expired() or
@@ -310,9 +323,6 @@ class Actor(object):
 
                 if heal:
                     self.world.on_heal(self, heal)
-
-                #if self.is_hero:
-                #    self.renderer.small_combat_text(self.pos, '+' + str(self.health_regen), (64, 192, 32))
 
         # move actor
         delta = self.move_dest - self.pos
