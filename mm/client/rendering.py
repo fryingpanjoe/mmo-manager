@@ -1,8 +1,11 @@
 import logging
-import pygame
 import os.path
+
+import pygame
+
 from thirdparty.vec2 import *
-from mm.scheduling import Timer
+
+from mm.common.scheduling import Timer
 
 LOG = logging.getLogger(__name__)
 
