@@ -106,7 +106,7 @@ class ReadBuffer(object):
             return None
 
     def read_string(self):
-        length = struct.pack('!H', self.peek(2))
+        length = struct.unpack('!H', self.peek(2))[0]
         if self.can_read(2 + length):
             self.skip(2)
             return self.read(length)
@@ -116,25 +116,25 @@ class ReadBuffer(object):
     def read_int16(self):
         data = self.read(2)
         if data:
-            data = struct.pack('!h', data)
+            data = struct.unpack('!h', data)[0]
         return data
 
     def read_uint16(self):
         data = self.read(2)
         if data:
-            data = struct.pack('!H', data)
+            data = struct.unpack('!H', data)[0]
         return data
 
     def read_int32(self):
         data = self.read(4)
         if data:
-            data = struct.pack('!i', data)
+            data = struct.unpack('!i', data)[0]
         return data
 
     def read_uint32(self):
         data = self.read(2)
         if data:
-            data = struct.pack('!I', data)
+            data = struct.unpack('!I', data)[0]
         return data
 
 
@@ -150,7 +150,7 @@ class Channel(object):
         self.read_buffer = ReadBuffer()
 
         # keep track of last sent message id
-        self.send_message_id = 0
+        self.send_message_id = 1
 
         # keep track of last received message id
         self.recv_message_id = None
@@ -167,59 +167,76 @@ class Channel(object):
             return False
 
     def receive_data(self):
-        # check if there's anything on the socket
-        readable, _, _ = select.select([self.sock], [], [])
-        if readable:
-            # read data!
-            data = self.sock.recv(self.MAX_RECEIVE_SIZE)
+        try:
+            # check if there's anything on the socket
+            readable, _, _ = select.select([self.sock], [], [])
+            if readable:
+                # read data!
+                data = self.sock.recv(self.MAX_RECEIVE_SIZE)
 
-            if not data:
-                # client disconnected
-                return False
+                if not data:
+                    # client disconnected
+                    return False
 
-            # handle recevied data
-            self.read_buffer.feed(data)
-            self.on_data_received()
+                # handle recevied data
+                self.read_buffer.feed(data)
+                self.on_data_received()
 
-        return True
+            return True
+        except socket.error:
+            LOG.exception('Socket error')
+            return False
 
     def send_data(self):
-        # serialize any outbound events in queue
-        if self.out_events:
-            event_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
+        try:
+            # serialize any outbound events in queue
+            if self.out_events:
+                event_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
 
-            # serialize as many events as possible
-            while self.out_events:
-                event = self.out_events[0]
-                serialized_event = serialize_event_to_string(event)
-                if event_writer.can_write(len(serialized_event)):
-                    event_writer.write_string(serialized_event)
-                    self.out_events.pop(0)
-                else:
-                    break
+                # serialize as many events as possible
+                while self.out_events:
+                    event = self.out_events[0]
+                    serialized_event = serialize_event_to_string(event)
+                    if event_writer.can_write(len(serialized_event)):
+                        event_writer.write_string(serialized_event)
+                        self.out_events.pop(0)
+                    else:
+                        break
 
-            # write message header and data
-            self.write_buffer.write_int32(self.send_message_id)
-            self.write_buffer.write_string(event_writer.get_buffer_data())
+                # write message header and data
+                self.write_buffer.write_int32(self.send_message_id)
+                self.write_buffer.write_string(event_writer.get_buffer_data())
 
-            # ready for next message
-            self.send_message_id += 1
+                # ready for next message
+                self.send_message_id += 1
 
-        # check if we have anything to send, and try to send it
-        if not self.write_buffer.is_empty():
-            # check if the socket is writable
-            _, writable, _ = select.select([], [self.sock], [], 0)
-            if writable:
-                # send data!
-                bytes_sent = self.sock.send(self.write_buffer.get_buffer_data())
-                self.write_buffer.skip(bytes_sent)
+            # check if we have anything to send, and try to send it
+            if not self.write_buffer.is_empty():
+                # check if the socket is writable
+                _, writable, _ = select.select([], [self.sock], [], 0)
+                if writable:
+                    # send data!
+                    bytes_sent = self.sock.send(
+                        self.write_buffer.get_buffer_data())
+
+                    if bytes_sent == 0:
+                        # something went wrong
+                        return False
+
+                    self.write_buffer.skip(bytes_sent)
+
+            return True
+        except socket.error:
+            LOG.exception('Socket error')
+            return False
 
     def on_data_received(self):
         # read message id
         if not self.recv_message_id:
             message_id = self.read_buffer.read_int32()
             if message_id:
-                if (self.recv_message_id + 1) != message_id:
+                if (self.recv_message_id and
+                    self.recv_message_id != (message_id - 1)):
                     raise RuntimeError(
                         'Out of sync %d + 1 != %d' %
                         (self.recv_message_id, message_id))
@@ -273,8 +290,12 @@ class Client(object):
     def connect(self, address, port):
         LOG.info('Connecting to server %s:%d', address, port)
         self.server_socket = socket.create_connection((address, port))
-        self.server_socket.setblocking(False)
-        self.channel = Channel(self.server_socket)
+        if self.server_socket:
+            self.channel = Channel(self.server_socket)
+            return True
+        else:
+            LOG.info('Failed to connect to server %s:%d', address, port)
+            return False
 
     def disconnect(self):
         LOG.info('Disconnecting from server')
@@ -285,12 +306,19 @@ class Client(object):
     def send_event(self, event):
         self.channel.send_event(event)
 
-    def update(self):
-        if self.channel.synchronize():
+    def read_from_server(self):
+        if self.channel.receive_data():
+            LOG.info('Got data from server')
             for event in self.channel.receive_events():
                 self.event_distributor.post(event)
         else:
             LOG.info('Server closed the connection')
+            self.disconnect()
+            self.event_distributor.post(ClientDisconnectedEvent(0))
+
+    def write_to_server(self):
+        if not self.channel.send_data():
+            LOG.info('Broken socket, disconnecting')
             self.disconnect()
             self.event_distributor.post(ClientDisconnectedEvent(0))
 
@@ -306,18 +334,18 @@ class Server(object):
     def start_server(self):
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.setblocking(0)
         self.server_socket.bind(('', self.port))
         self.server_socket.listen(10)
 
     def stop_server(self):
-        self.server_socket.close()
+        if self.server_socket:
+            self.server_socket.close()
+            self.server_socket = None
 
     def accept_pending_clients(self):
         readable, _, _ = select.select([self.server_socket], [], [], 0)
         if readable:
             client_socket, address = self.server_socket.accept()
-            client_socket.setblocking(0)
             self.client_sockets.append(client_socket)
             client_id = client_socket.fileno()
             self.channels[client_id] = Channel(client_socket)
@@ -350,4 +378,9 @@ class Server(object):
         _, writable, _ = select.select([], self.client_sockets, [], 0)
         for sock in writable:
             client_id = sock.fileno()
-            self.channels[client_id].send_data()
+            if not self.channels[client_id].send_data():
+                LOG.info('Broken socket to client %d, disconnecting', client_id)
+                self.client_sockets.remove(sock)
+                del self.channels[client_id]
+                self.event_distributor.post(
+                    ClientDisconnectedEvent(client_id))

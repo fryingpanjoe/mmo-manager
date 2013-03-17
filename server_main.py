@@ -21,9 +21,18 @@ def event_debug_printer(event):
 
 
 class ServerEventHandler(object):
-    def __init__(self, server, world):
+    def __init__(self, event_distributor, server, world):
+        self.event_distributor = event_distributor
         self.server = server
         self.world = world
+
+    def on_player_spawn_mob(self, event):
+        LOG.info('Player spawning mob %s at %r', event.actor_type, event.pos)
+        self.world.spawn_actor(event.actor_type, event.pos)
+
+    def on_client_event(self, event):
+        LOG.info('Client %d sent event %s', event.client_id, type(event.event))
+        self.event_distributor.send(event.event)
 
     def on_client_connected(self, event):
         enter_game_event = EnterGameEvent(
@@ -75,11 +84,15 @@ def main():
         world.spawn_actor('supercreep', vec2(400, 300))
 
         LOG.info('...initializing server event handler')
-        event_handler = ServerEventHandler(server, world)
+        event_handler = ServerEventHandler(event_distributor, server, world)
         event_distributor.add_handler(
             event_handler.on_client_connected, ClientConnectedEvent)
         event_distributor.add_handler(
             event_handler.on_client_disconnected, ClientDisconnectedEvent)
+        event_distributor.add_handler(
+            event_handler.on_client_event, ClientEvent)
+        event_distributor.add_handler(
+            event_handler.on_player_spawn_mob, PlayerActionSpawnMobEvent)
 
         LOG.info('Starting server')
         server.start_server()

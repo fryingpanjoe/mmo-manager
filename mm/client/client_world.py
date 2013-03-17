@@ -13,14 +13,13 @@ LOG = logging.getLogger(__name__)
 
 
 class ClientWorld(object):
-    def __init__(self, event_distributor, scheduler, renderer, actor_store,
-                 width, height):
+    def __init__(self, event_distributor, scheduler, renderer, actor_store):
         self.event_distributor = event_distributor
         self.scheduler = scheduler
         self.renderer = renderer
         self.actor_store = actor_store
-        self.width = width
-        self.height = height
+        self.width = None
+        self.height = None
         self.actors = []
         self.client_actors = {}
 
@@ -133,11 +132,13 @@ class ClientWorld(object):
 class ClientActor(object):
     def __init__(self, actor, spawn_params, renderer):
         self.actor = actor
+        self.renderer = renderer
 
         if 'image' in spawn_params:
             self.image = self.renderer.load_image(spawn_params['image'])
         else:
             self.image = None
+
         if 'image_dead' in spawn_params:
             self.image_dead = self.renderer.load_image(
                 spawn_params['image_dead'])
@@ -154,6 +155,8 @@ class ClientActor(object):
                 image = self.image_dead
             else:
                 image = self.image
+        else:
+            image = None
 
         if image:
             # draw image

@@ -73,6 +73,12 @@ class SetTargetEvent(object):
         self.previous_target_id = previous_target_id
 
 
+class PlayerActionSpawnMobEvent(object):
+    def __init__(self, actor_type, pos):
+        self.actor_type = actor_type
+        self.pos = pos
+
+
 ALL_GAME_EVENT_TYPES = [
     ActorSpawnedEvent, ActorDiedEvent, AttackEvent, HealEvent, LootEvent,
     SetTargetEvent]
@@ -80,9 +86,12 @@ ALL_GAME_EVENT_TYPES = [
 ALL_SERVER_EVENT_TYPES = [
     ClientEvent, ClientConnectedEvent, ClientDisconnectedEvent]
 
+ALL_PLAYER_EVENT_TYPES = [PlayerActionSpawnMobEvent]
+
 ALL_EVENT_TYPES = \
     ALL_GAME_EVENT_TYPES + \
     ALL_SERVER_EVENT_TYPES + \
+    ALL_PLAYER_EVENT_TYPES + \
     [EnterGameEvent, DeltaStateEvent]
 
 

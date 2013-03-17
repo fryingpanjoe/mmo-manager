@@ -2,7 +2,7 @@ import logging
 import pygame
 
 from mm.common.scheduling import Scheduler
-from mm.common.world import World
+from mm.common.world import World, ActorStore
 from mm.common.networking import Client, DEFAULT_NETWORK_PORT
 from mm.common.events import *
 from mm.client.rendering import Renderer
@@ -138,7 +138,7 @@ class User(object):
 
 class MultiplayerState(object):
     def __init__(self, session, client, event_distributor, scheduler, renderer,
-                 actor_store):
+                 actor_store, screen_width, screen_height):
         self.session = session
         self.client = client
         self.event_distributor = event_distributor
@@ -148,25 +148,28 @@ class MultiplayerState(object):
 
         self.user = User(self.actor_store)
 
-        self.hud = Hud(self.user, self.actor_store, self.world, self.renderer)
+        self.hud = Hud(
+            self.event_distributor, self.user, self.actor_store, self.renderer)
         self.hud.generate_mob_icons(screen_width, screen_height)
+
+        self.client_world = ClientWorld(
+            self.event_distributor, self.scheduler, self.renderer,
+            self.actor_store)
 
         self.event_distributor.add_handler(
             self.on_client_disconnected, ClientDisconnectedEvent)
-
-        self.client_world = ClientWorld(
-            event_distributor, scheduler, renderer, actor_store, 800, 600)
 
     def on_event(self, event):
         self.hud.on_event(event)
 
     def update(self, screen, frame_time):
+        self.client.read_from_server()
         self.scheduler.update(frame_time)
-
         screen.fill((255, 255, 255))
-        self.world.update(screen, frame_time)
+        self.client_world.update(screen, frame_time)
         self.hud.update(screen, frame_time)
         self.renderer.update(screen, frame_time)
+        self.client.write_to_server()
 
     def on_client_disconnected(self, event):
         if event.client_id == 0:
@@ -230,9 +233,13 @@ class Session(object):
         client = Client(event_distributor)
 
         if client.connect(address, port):
+            scheduler = Scheduler()
+            renderer = Renderer()
+            actor_store = ActorStore('actors.json')
+
             self.play_state = MultiplayerState(
-                self, client, event_distributor,
-                self.screen.get_width(), self.screen.get_height())
+                self, client, event_distributor, scheduler, renderer,
+                actor_store, self.screen.get_width(), self.screen.get_height())
 
             self.current_state = self.play_state
 

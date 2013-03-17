@@ -58,69 +58,14 @@ class World(object):
         self.actors = []
 
     def spawn_actor(self, actor_type, pos):
-        actor_class = self.actor_store.get_params(actor_type)
-
-        is_hero = actor_type == 'hero'
-
-        speed = actor_class.get('speed', 1)
-
-        radius = actor_class.get('radius', 1)
-
-        # attack range
-        min_attack_range = actor_class.get('min_range', radius)
-        max_attack_range = actor_class.get('max_range', min_attack_range)
-        attack_range = int(random.uniform(min_attack_range, max_attack_range))
-
-        # threat range
-        threat_range = actor_class.get('threat_range', 1.5 * attack_range)
-        threat_range = max(radius, threat_range)
-
-        # damage
-        min_damage = max(0, actor_class.get('min_damage', 0))
-        max_damage = actor_class.get('max_damage', min_damage)
-        damage_range = (min_damage, max_damage)
-
-        # health
-        min_health = max(1, actor_class.get('min_health', 1))
-        max_health = actor_class.get('max_health', min_health)
-        max_health = int(random.uniform(min_health, max_health))
-        health = max_health
-
-        # health regen
-        health_regen = actor_class.get('health_regen', 0)
-        regen_time = actor_class.get('regen_time', 2)
-
-        # loot
-        if is_hero:
-            loot_value = 0
-        else:
-            loot_avg = actor_class.get('loot_avg', 10)
-            loot_var = actor_class.get('loot_var', loot_avg / 5)
-            loot_value = max(1, int(random.gauss(loot_avg, loot_var)))
-
-        attack_time = actor_class.get('attack_time', 2)
-
-        miss_rate = actor_class.get('miss_rate', 0.1)
-
-        # wander properties
-        wander_radius = 100
-        wander_time = (1, 4)
-
-        # generator new actor id
         actor_id = self.get_next_actor_id()
 
-        # create actor
-        actor = Actor(
-            actor_id, actor_type, is_hero, speed, radius, attack_range,
-            threat_range, damage_range, max_health, max_health, health_regen,
-            wander_radius, miss_rate, loot_value, wander_time, attack_time,
-            regen_time, pos, self)
+        actor = Actor.from_params(
+            self.actor_store.get_params(actor_type), actor_id, self, pos=pos)
 
-        # add actor to world
         self.actors.append(actor)
         self.event_distributor.post(ActorSpawnedEvent(actor.get_state()))
 
-        # return our newly spawned actor
         return actor
 
     def spawn_hero(self):
@@ -218,6 +163,63 @@ class Actor(object):
         actor.update_state(state)
         return actor
 
+    @classmethod
+    def from_params(cls, params, actor_id, world, pos=None):
+        actor_type = params['type']
+
+        is_hero = actor_type == 'hero'
+
+        speed = params.get('speed', 1)
+
+        radius = params.get('radius', 1)
+
+        # attack range
+        min_attack_range = params.get('min_range', radius)
+        max_attack_range = params.get('max_range', min_attack_range)
+        attack_range = int(random.uniform(min_attack_range, max_attack_range))
+
+        # threat range
+        threat_range = params.get('threat_range', 1.5 * attack_range)
+        threat_range = max(radius, threat_range)
+
+        # damage
+        min_damage = max(0, params.get('min_damage', 0))
+        max_damage = params.get('max_damage', min_damage)
+        damage_range = (min_damage, max_damage)
+
+        # health
+        min_health = max(1, params.get('min_health', 1))
+        max_health = params.get('max_health', min_health)
+        max_health = int(random.uniform(min_health, max_health))
+        health = max_health
+
+        # health regen
+        health_regen = params.get('health_regen', 0)
+        regen_time = params.get('regen_time', 2)
+
+        # loot
+        if is_hero:
+            loot_value = 0
+        else:
+            loot_avg = params.get('loot_avg', 10)
+            loot_var = params.get('loot_var', loot_avg / 5)
+            loot_value = max(1, int(random.gauss(loot_avg, loot_var)))
+
+        attack_time = params.get('attack_time', 2)
+
+        miss_rate = params.get('miss_rate', 0.1)
+
+        # wander properties
+        wander_radius = 100
+        wander_time = (1, 4)
+
+        # create actor
+        return cls(
+            actor_id, actor_type, is_hero, speed, radius, attack_range,
+            threat_range, damage_range, max_health, max_health, health_regen,
+            wander_radius, miss_rate, loot_value, wander_time, attack_time,
+            regen_time, pos, world)
+
     def __init__(self, actor_id, actor_type, is_hero, speed, radius,
                  attack_range, threat_range, damage_range, max_health,
                  health, health_regen, wander_radius, miss_rate, loot_value,
@@ -241,7 +243,10 @@ class Actor(object):
         self.attack_timer = Timer(attack_time, False)
         self.regen_timer = Timer(regen_time, False)
 
-        self.pos = pos
+        if pos:
+            self.pos = pos
+        else:
+            self.pos = vec2(0, 0)
 
         self.world = world
 
