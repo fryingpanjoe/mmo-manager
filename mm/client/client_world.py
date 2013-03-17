@@ -61,6 +61,9 @@ class ClientWorld(object):
                 LOG.warning('State for unknown actor %d', actor_state.actor_id)
 
     def on_actor_spawned(self, event):
+        LOG.info(
+            'Actor %d of type %s spawned', event.actor_state.actor_id,
+            event.actor_state.actor_type)
         local_actor = self.find_actor_by_id(event.actor_state.actor_id)
         if local_actor:
             LOG.error(
@@ -75,7 +78,6 @@ class ClientWorld(object):
 
     def on_actor_died(self, event):
         LOG.info('Actor %d died', event.actor_id)
-
         local_actor = self.find_actor_by_id(event.actor_id)
         if local_actor:
             # kill the actor
