@@ -2,6 +2,7 @@ import logging
 import socket
 import select
 import struct
+import zlib
 
 from mm.common.events import (serialize_event_to_string,
                               serialize_event_from_string,
@@ -12,6 +13,16 @@ from mm.common.events import (serialize_event_to_string,
 LOG = logging.getLogger(__name__)
 
 DEFAULT_NETWORK_PORT = 8888
+COMPRESSION_LEVEL = 1
+
+
+def compress_data(data):
+    return zlib.compress(data, COMPRESSION_LEVEL)
+
+
+def decompress_data(data):
+    return zlib.decompress(data)
+
 
 
 class WriteBuffer(object):
@@ -204,9 +215,17 @@ class Channel(object):
                     else:
                         break
 
+                message_data = event_writer.get_buffer_data()
+                compressed_message_data = compress_data(message_data)
+
+                #LOG.debug(
+                #    'Compression %d -> %d bytes, compression factor %f',
+                #    len(message_data), len(compressed_message_data),
+                #    float(len(compressed_message_data)) / len(message_data))
+
                 # write message header and data
                 self.write_buffer.write_int32(self.send_message_id)
-                self.write_buffer.write_string(event_writer.get_buffer_data())
+                self.write_buffer.write_string(compressed_message_data)
 
                 # ready for next message
                 self.send_message_id += 1
@@ -247,7 +266,7 @@ class Channel(object):
         if self.recv_message_id:
             message_data = self.read_buffer.read_string()
             if message_data:
-                self.on_message_received(message_data)
+                self.on_message_received(decompress_data(message_data))
 
     def on_message_received(self, message_data):
         event_reader = ReadBuffer(message_data)
