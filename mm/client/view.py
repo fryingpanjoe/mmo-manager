@@ -39,23 +39,38 @@ class ClientWorld(object):
                 return actor
         return None
 
+    def new_client_actor(self, actor):
+        return ClientActor(
+            actor, self.actor_store.get_params(actor.actor_type), self.renderer)
+
     def on_enter_game(self, event):
-        self.actors = event.actors
+        LOG.info(
+            'Enter game %d x %d, %d actors', event.width, event.height,
+            len(event.actor_states))
+        self.width = event.width
+        self.height = event.height
+        self.actors = [
+            Actor.from_state(actor_state, self.world)
+            for actor_state in event.actor_states]
+        self.client_actors = dict(
+            (actor.actor_id, new_client_actor(actor)) for actor in self.actors)
 
     def on_delta_state(self, event):
-        for actor in event.actors:
-            local_actor = self.find_actor(actor.actor_id)
+        for actor in event.actor_states:
+            local_actor = self.find_actor(actor_state.actor_id)
             if local_actor:
-                local_actor.__dict__.update(actor.__dict__)
+                local_actor.update_state(actor_state)
 
     def on_actor_spawned(self, event):
-        local_actor = self.find_actor(event.actor.actor_id)
+        local_actor = self.find_actor(event.actor_state.actor_id)
         if local_actor:
             LOG.error(
-                'Spawned actor already exists: id=%d', event.actor.actor_id)
+                'Spawned actor already exists: id=%d',
+                event.actor_state.actor_id)
         else:
-            self.actors.append(event.actor)
-            self.client_actors[event.actor.actor_id] = ClientActor(
+            actor = Actor.from_state(event.actor_state)
+            self.actors.append(actor)
+            self.client_actors[actor.actor_id] = ClientActor(
                 actor, self.actor_store.get_params(actor.actor_type),
                 self.renderer)
 

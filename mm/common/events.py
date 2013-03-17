@@ -26,20 +26,20 @@ class ClientDisconnectedEvent(object):
 
 
 class EnterGameEvent(object):
-    def __init__(self, width, height, actors):
+    def __init__(self, width, height, actor_states):
         self.width = width
         self.height = height
-        self.actors = actors
+        self.actor_states = actor_states
 
 
 class DeltaStateEvent(object):
-    def __init__(self, actors):
-        self.actors = actors
+    def __init__(self, actor_states):
+        self.actor_states = actor_states
 
 
 class ActorSpawnedEvent(object):
-    def __init__(self, actor):
-        self.actor = actor
+    def __init__(self, actor_state):
+        self.actor_state = actor_state
 
 
 class ActorDiedEvent(object):

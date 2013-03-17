@@ -26,9 +26,10 @@ class ServerEventHandler(object):
         self.world = world
 
     def on_client_connected(self, event):
-        # send world state to client
         enter_game_event = EnterGameEvent(
-            self.world.width, self.world.height, self.world.actors)
+            self.world.width, self.world.height,
+            [actor.get_state() for actor in self.world.actors])
+
         self.server.send_event(event.client_id, enter_game_event)
 
     def on_client_disconnected(self, event):
@@ -90,9 +91,11 @@ def main():
             frame_time = current_time - last_time
             last_time = current_time
 
-            # accept new clients and read data from clients
-            server.accept_pending_clients()
+            # read data from clients
             server.read_from_clients()
+
+            # accept new clients
+            server.accept_pending_clients()
 
             # update timers
             scheduler.update(frame_time)
@@ -105,7 +108,8 @@ def main():
 
             # compute delta event
             # TODO: send only updated actors
-            server.broadcast_event(DeltaStateEvent(world.actors))
+            server.broadcast_event(
+                DeltaStateEvent([actor.get_state() for actor in world.actors]))
 
             # send data to clients
             server.write_to_clients()

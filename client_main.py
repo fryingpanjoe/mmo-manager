@@ -13,11 +13,6 @@ LOG = logging.getLogger(__name__)
 WINDOW_TITLE = 'MMO Manager 2013'
 
 
-class ClientEventHandler(object):
-    def __init__(self, game):
-        self.game = game
-
-
 def main():
     logging.config.fileConfig('logging.conf', disable_existing_loggers=False)
 

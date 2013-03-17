@@ -2,6 +2,7 @@ import logging
 import random
 import math
 import json
+import traceback
 
 import pygame
 
@@ -23,6 +24,18 @@ class ActorStore(object):
 
     def get_all_names(self):
         return self.actors.keys()
+
+
+class ObjectState(dict):
+    def __init__(self, object_type, *args, **kwargs):
+        super(ObjectState, self).__init__(*args, **kwargs)
+        self.object_type = object_type
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError
 
 
 class World(object):
@@ -105,14 +118,10 @@ class World(object):
 
         # add actor to world
         self.actors.append(actor)
-        self.event_distributor.post(ActorSpawnedEvent(actor))
+        self.event_distributor.post(ActorSpawnedEvent(actor.get_state()))
 
         # return our newly spawned actor
         return actor
-
-    def get_next_actor_id(self):
-        self.actor_id_generator += 1
-        return self.actor_id_generator
 
     def spawn_hero(self):
         pad = 64.
@@ -140,10 +149,20 @@ class World(object):
 
         return self.spawn_actor('hero', World.get_random_position_inside(r))
 
+    def get_next_actor_id(self):
+        self.actor_id_generator += 1
+        return self.actor_id_generator
+
     def update(self, frame_time):
         for actor in self.actors:
             if actor.is_alive():
                 actor.think(frame_time)
+
+    def find_actor_by_id(self, actor_id):
+        for actor in self.actors:
+            if actor.actor_id == actor_id:
+                return actor
+        return None
 
     def find_nearby_actors(self, pos, search_radius):
         for actor in self.actors:
@@ -155,6 +174,7 @@ class World(object):
         return self.bounds.collidepoint(pos.as_int_tuple())
 
     def on_actor_died(self, actor):
+        LOG.info('Actor %d died', actor.actor_id)
         self.event_distributor.post(ActorDiedEvent(actor.actor_id))
         self.actors.remove(actor)
         #self.scheduler.post(
@@ -186,6 +206,18 @@ class World(object):
 
 
 class Actor(object):
+    @classmethod
+    def from_state(cls, state, world):
+        actor = cls(
+            state.actor_id, state.actor_type, state.is_hero, state.speed,
+            state.radius, state.attack_range, state.threat_range,
+            state.damage_range, state.max_health, state.health,
+            state.health_regen, state.wander_radius, state.miss_rate,
+            state.loot_value, state.wander_time, state.attack_time,
+            state.regen_time, state.pos, world)
+        actor.update_state(state)
+        return actor
+
     def __init__(self, actor_id, actor_type, is_hero, speed, radius,
                  attack_range, threat_range, damage_range, max_health,
                  health, health_regen, wander_radius, miss_rate, loot_value,
@@ -213,11 +245,40 @@ class Actor(object):
 
         self.world = world
 
-        self.target = None
+        self.target_id = None
 
         self.move_dest = vec2(0, 0)
 
         self.set_random_destination()
+
+    def get_state(self):
+        return ObjectState('actor', {
+            'actor_id': self.actor_id,
+            'actor_type': self.actor_type,
+            'is_hero': self.is_hero,
+            'speed': self.speed,
+            'radius': self.radius,
+            'attack_range': self.attack_range,
+            'threat_range': self.threat_range,
+            'damage_range': self.damage_range,
+            'max_health': self.max_health,
+            'health': self.health,
+            'health_regen': self.health_regen,
+            'wander_radius': self.wander_radius,
+            'miss_rate': self.miss_rate,
+            'loot_value': self.loot_value,
+            'wander_timer': self.wander_timer,
+            'attack_timer': self.attack_timer,
+            'regen_timer': self.regen_timer,
+            'pos': self.pos,
+            'target_id': self.target_id,
+            'move_dest': self.move_dest
+        })
+
+    def update_state(self, state):
+        assert state.object_type == 'actor'
+        for key, value in state.iteritems():
+            setattr(self, key, value)
 
     def set_destination(self, pos, timeout=30):
         self.wander_timer.reset(timeout)
@@ -253,13 +314,19 @@ class Actor(object):
         if self.is_dead():
             self.world.on_actor_died(self)
 
-        if (not self.target or
-            not self.is_in_range(self.target, self.attack_range)):
+        target = self.world.find_actor_by_id(self.target_id)
+
+        if (not target or
+            not self.is_in_range(target, self.attack_range)):
             self.set_target(attacker)
 
-    def set_target(self, other):
-        self.target = other
-        self.world.on_set_target(self, self.target)
+    def set_target(self, target):
+        if target:
+            self.target_id = target.actor_id
+        else:
+            self.target_id = None
+
+        self.world.on_set_target(self, target)
 
     def reward(self, loot):
         self.loot_value += loot
@@ -267,19 +334,20 @@ class Actor(object):
 
     def shoot_at_target(self):
         if self.attack_timer.is_expired_then_reset():
+            target = self.world.find_actor_by_id(self.target_id)
+
             if random.random() < self.miss_rate:
                 # miss
                 damage = 0
             else:
                 damage = int(random.uniform(*self.damage_range))
-
-                self.target.take_damage(damage, attacker=self)
+                target.take_damage(damage, attacker=self)
 
                 # give loot to heroes!
-                if self.target.is_dead() and self.is_hero:
-                    self.reward(self.target.loot_value)
+                if target.is_dead() and self.is_hero:
+                    self.reward(target.loot_value)
 
-            self.world.on_attack(self, self.target, damage)
+            self.world.on_attack(self, target, damage)
 
     def is_dead(self):
         return self.health <= 0
@@ -302,20 +370,26 @@ class Actor(object):
         self.regen_timer.update(frame_time)
 
         # move to or attack target, if any
-        if self.target:
-            if self.target.is_dead(): # or not self.is_in_range(self.target, self.threat_range):
+        if self.target_id:
+            target = self.world.find_actor_by_id(self.target_id)
+            if not target:
+                LOG.info('Failed to find target %d, wandering', self.target_id)
                 self.set_target(None)
                 self.set_random_destination()
-            elif self.is_in_range(self.target, self.attack_range):
-                self.move_dest = self.pos
-                self.shoot_at_target()
             else:
-                self.move_dest = self.target.pos
+                if target.is_dead(): # or not self.is_in_range(target, self.threat_range):
+                    self.set_target(None)
+                    self.set_random_destination()
+                elif self.is_in_range(target, self.attack_range):
+                    self.move_dest = self.pos
+                    self.shoot_at_target()
+                else:
+                    self.move_dest = target.pos
         else:
             self.attack_or_wander()
 
         # heal actor
-        if self.regen_timer.is_expired_then_reset() and not self.target:
+        if self.regen_timer.is_expired_then_reset() and not self.target_id:
             if self.health < self.max_health:
                 heal = min(self.health_regen, self.max_health - self.health)
 

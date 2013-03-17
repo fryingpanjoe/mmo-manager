@@ -168,7 +168,7 @@ class Channel(object):
 
     def receive_data(self):
         # check if there's anything on the socket
-        readable, _, _ = select.select([self.sock], [], [], 0)
+        readable, _, _ = select.select([self.sock], [], [])
         if readable:
             # read data!
             data = self.sock.recv(self.MAX_RECEIVE_SIZE)
@@ -199,8 +199,8 @@ class Channel(object):
                     break
 
             # write message header and data
-            self.write_buffer.write(self.send_message_id)
-            self.write_buffer.write_string(write_buffer.get_buffer_data())
+            self.write_buffer.write_int32(self.send_message_id)
+            self.write_buffer.write_string(event_writer.get_buffer_data())
 
             # ready for next message
             self.send_message_id += 1
@@ -271,11 +271,13 @@ class Client(object):
         return self.server_socket
 
     def connect(self, address, port):
+        LOG.info('Connecting to server %s:%d', address, port)
         self.server_socket = socket.create_connection((address, port))
         self.server_socket.setblocking(False)
         self.channel = Channel(self.server_socket)
 
     def disconnect(self):
+        LOG.info('Disconnecting from server')
         self.server_socket.close()
         self.server_socket = None
         self.channel = None
@@ -288,6 +290,7 @@ class Client(object):
             for event in self.channel.receive_events():
                 self.event_distributor.post(event)
         else:
+            LOG.info('Server closed the connection')
             self.disconnect()
             self.event_distributor.post(ClientDisconnectedEvent(0))
 
@@ -305,7 +308,7 @@ class Server(object):
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.setblocking(0)
         self.server_socket.bind(('', self.port))
-        self.server_socket.listen(5)
+        self.server_socket.listen(10)
 
     def stop_server(self):
         self.server_socket.close()
@@ -332,8 +335,9 @@ class Server(object):
         readable, _, _ = select.select(self.client_sockets, [], [], 0)
         for sock in readable:
             client_id = sock.fileno()
-            if self.channels[client_id].receive_data():
-                for event in self.channels[sock].receive_events():
+            channel = self.channels[client_id]
+            if channel.receive_data():
+                for event in channel.receive_events():
                     self.event_distributor.post(ClientEvent(client_id, event))
             else:
                 LOG.info('Client %d disconnected', client_id)
