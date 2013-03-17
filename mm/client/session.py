@@ -7,7 +7,7 @@ from mm.common.networking import Client, DEFAULT_NETWORK_PORT
 from mm.common.events import *
 from mm.client.rendering import Renderer
 from mm.client.hud import Hud
-from mm.client.view import ClientWorld
+from mm.client.client_world import ClientWorld
 
 LOG = logging.getLogger(__name__)
 
@@ -136,6 +136,10 @@ class User(object):
         self.current_hero_count -= 1
 
 
+def event_debug_printer(event):
+    LOG.info('event: ' + str(event))
+
+
 class MultiplayerState(object):
     def __init__(self, session, client, event_distributor, scheduler, renderer,
                  actor_store, screen_width, screen_height):
@@ -158,6 +162,11 @@ class MultiplayerState(object):
 
         self.event_distributor.add_handler(
             self.on_client_disconnected, ClientDisconnectedEvent)
+        self.event_distributor.add_handler(
+            self.on_player_spawn_mob, PlayerActionSpawnMobEvent)
+
+        self.event_distributor.add_handler(
+            event_debug_printer, ALL_EVENT_TYPES)
 
     def on_event(self, event):
         self.hud.on_event(event)
@@ -168,6 +177,7 @@ class MultiplayerState(object):
         screen.fill((255, 255, 255))
         self.client_world.update(screen, frame_time)
         self.hud.update(screen, frame_time)
+        self.event_distributor.update()
         self.renderer.update(screen, frame_time)
         self.client.write_to_server()
 
@@ -177,6 +187,10 @@ class MultiplayerState(object):
             self.session.menu()
         else:
             LOG.info('Client %d disconnected', event.client_id)
+
+    def on_player_spawn_mob(self, event):
+        LOG.info('Player spawn mob %s at %r', event.actor_type, event.pos)
+        self.client.send_event(event)
 
 """
 class SingleplayerState(object):

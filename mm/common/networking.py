@@ -6,7 +6,8 @@ import struct
 from mm.common.events import (serialize_event_to_string,
                               serialize_event_from_string,
                               ClientConnectedEvent,
-                              ClientDisconnectedEvent)
+                              ClientDisconnectedEvent,
+                              ClientEvent)
 
 LOG = logging.getLogger(__name__)
 
@@ -139,8 +140,8 @@ class ReadBuffer(object):
 
 
 class Channel(object):
-    MAX_MESSAGE_SIZE = 4096
-    MAX_RECEIVE_SIZE = 4096
+    MAX_MESSAGE_SIZE = 8192
+    MAX_RECEIVE_SIZE = 8192
 
     def __init__(self, sock):
         self.sock = sock
@@ -272,7 +273,7 @@ class Channel(object):
 
     def receive_events(self):
         for event in self.in_events:
-            yield self.in_events
+            yield event
 
         # clear inbound queue
         self.in_events = []
@@ -308,7 +309,6 @@ class Client(object):
 
     def read_from_server(self):
         if self.channel.receive_data():
-            LOG.info('Got data from server')
             for event in self.channel.receive_events():
                 self.event_distributor.post(event)
         else:

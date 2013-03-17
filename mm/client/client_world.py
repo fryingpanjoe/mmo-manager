@@ -6,7 +6,7 @@ import pygame
 
 from thirdparty.vec2 import *
 from mm.common.events import *
-from mm.common.world import World
+from mm.common.world import World, Actor
 from mm.common.scheduling import Timer
 
 LOG = logging.getLogger(__name__)
@@ -18,9 +18,9 @@ class ClientWorld(object):
         self.scheduler = scheduler
         self.renderer = renderer
         self.actor_store = actor_store
-        self.width = None
-        self.height = None
-        self.actors = []
+
+        self.world = None
+
         self.client_actors = {}
 
         self.event_distributor.add_handler(self.on_enter_game, EnterGameEvent)
@@ -32,11 +32,8 @@ class ClientWorld(object):
         self.event_distributor.add_handler(self.on_loot, LootEvent)
         self.event_distributor.add_handler(self.on_set_target, SetTargetEvent)
 
-    def find_actor(self, actor_id):
-        for actor in self.actors:
-            if actor.actor_id == actor_id:
-                return actor
-        return None
+    def find_actor_by_id(self, actor_id):
+        return self.world.find_actor_by_id(actor_id)
 
     def new_client_actor(self, actor):
         return ClientActor(
@@ -46,29 +43,30 @@ class ClientWorld(object):
         LOG.info(
             'Enter game %d x %d, %d actors', event.width, event.height,
             len(event.actor_states))
-        self.width = event.width
-        self.height = event.height
-        self.actors = [
+        actors = [
             Actor.from_state(actor_state, self.world)
             for actor_state in event.actor_states]
+        self.world = World(
+            self.event_distributor, self.scheduler, self.actor_store,
+            event.width, event.height, actors=actors)
         self.client_actors = dict(
-            (actor.actor_id, new_client_actor(actor)) for actor in self.actors)
+            (actor.actor_id, self.new_client_actor(actor)) for actor in actors)
 
     def on_delta_state(self, event):
-        for actor in event.actor_states:
-            local_actor = self.find_actor(actor_state.actor_id)
+        for actor_state in event.actor_states:
+            local_actor = self.find_actor_by_id(actor_state.actor_id)
             if local_actor:
                 local_actor.update_state(actor_state)
 
     def on_actor_spawned(self, event):
-        local_actor = self.find_actor(event.actor_state.actor_id)
+        local_actor = self.find_actor_by_id(event.actor_state.actor_id)
         if local_actor:
             LOG.error(
                 'Spawned actor already exists: id=%d',
                 event.actor_state.actor_id)
         else:
-            actor = Actor.from_state(event.actor_state)
-            self.actors.append(actor)
+            actor = Actor.from_state(event.actor_state, self.world)
+            self.world.add_actor(actor)
             self.client_actors[actor.actor_id] = ClientActor(
                 actor, self.actor_store.get_params(actor.actor_type),
                 self.renderer)
@@ -82,8 +80,8 @@ class ClientWorld(object):
         del self.client_actors[actor_id]
 
     def on_attack(self, event):
-        attacker = self.find_actor(event.attacker_id)
-        victim = self.find_actor(event.victim_id)
+        attacker = self.find_actor_by_id(event.attacker_id)
+        victim = self.find_actor_by_id(event.victim_id)
 
         if attacker.is_hero:
             damage_color = (255, 64, 0)
@@ -106,20 +104,20 @@ class ClientWorld(object):
             self.renderer.combat_text(victim.pos, str(damage), text_color)
 
     def on_heal(self, event):
-        local_actor = self.find_actor(event.actor_id)
+        local_actor = self.find_actor_by_id(event.actor_id)
         if local_actor:
             if local_actor.is_hero:
                 self.renderer.small_combat_text(
                     local_actor.pos, '+' + str(event.heal), (64, 192, 32))
 
     def on_loot(self, event):
-        local_actor = self.find_actor(event.actor_id)
+        local_actor = self.find_actor_by_id(event.actor_id)
         if local_actor:
             self.renderer.combat_text(
                 local_actor.pos, '+' + str(event.loot), (192, 0, 192), False)
 
     def on_set_target(self, event):
-        #local_actor = self.find_actor(event.actor_id)
+        #local_actor = self.find_actor_by_id(event.actor_id)
         #if event.target_id:
         #    self.renderer.combat_text(local_actor.pos, '!', (255, 192, 64))
         pass
@@ -146,6 +144,9 @@ class ClientActor(object):
             self.image_dead = None
 
         self.color = tuple(spawn_params.get('color', (0, 0, 0)))
+
+    def update(self, screen, frame_time):
+        self.draw(screen)
 
     def draw(self, screen, icon=False):
         pos_tuple = self.actor.pos.as_int_tuple()

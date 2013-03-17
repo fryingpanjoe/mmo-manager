@@ -4,6 +4,7 @@ from thirdparty.vec2 import vec2
 
 from mm.client.client_world import ClientActor
 from mm.common.world import Actor
+from mm.common.events import PlayerActionSpawnMobEvent
 
 
 class MobIcon(object):
@@ -90,8 +91,7 @@ class Hud(object):
             self.spawn_actor('hero', vec2(pygame.mouse.get_pos()))
 
     def spawn_actor(self, actor_type, pos):
-        self.event_distributor.post(
-            PlayerActionSpawnMobEvent(actor_type, spawn_pos))
+        self.event_distributor.post(PlayerActionSpawnMobEvent(actor_type, pos))
 
     def update(self, screen, frame_time):
         # compute claimed and unclaimed loot
