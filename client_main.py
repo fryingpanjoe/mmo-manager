@@ -48,7 +48,7 @@ def main():
 
         try:
             max_fps = float(config.get('rendering', 'max_fps'))
-            if max_fps <= 0.0:
+            if max_fps <= 0.:
                 LOG.warn('invalid max_fps %f, should be >= 0', max_fps)
                 max_fps = 60.
         except KeyError:
@@ -57,7 +57,7 @@ def main():
         LOG.info('Maximum FPS %.2f', max_fps)
 
         while session.is_running:
-            frame_time = min(clock.tick() / 1000.0, 1.0 / max_fps)
+            frame_time = min(clock.tick() / 1000., 1. / max_fps)
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     LOG.info('got pygame.QUIT, exiting...')
