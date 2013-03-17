@@ -202,10 +202,10 @@ class Channel(object):
     def send_message(self, message_data):
         compressed_message_data = compress_data(message_data)
 
-        LOG.debug(
-            'Compression %d -> %d bytes, compression factor %f',
-            len(message_data), len(compressed_message_data),
-            float(len(compressed_message_data)) / len(message_data))
+        #LOG.debug(
+        #    'Compression %d -> %d bytes, compression factor %f',
+        #    len(message_data), len(compressed_message_data),
+        #    float(len(compressed_message_data)) / len(message_data))
 
         self.write_buffer.write_int32(self.send_message_id)
         self.write_buffer.write_string(compressed_message_data)
@@ -213,13 +213,9 @@ class Channel(object):
         self.send_message_id += 1
 
     def send_all_events(self):
-        message_writer = None
+        message_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
 
         for event in self.out_events:
-            LOG.info('writing event %s', type(event))
-            if not message_writer:
-                message_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
-
             # serialize event to string
             serialized_event = serialize_event_to_string(event)
 
@@ -231,7 +227,13 @@ class Channel(object):
                 else:
                     # send message and continue with the next
                     self.send_message(message_writer.get_buffer_data())
-                    message_writer = None
+                    message_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
+                    if not message_writer.write_string(serialized_event):
+                        raise RuntimeError('Failed to write event')
+
+        # send remaining data
+        if not message_writer.is_empty():
+            self.send_message(message_writer.get_buffer_data())
 
         # no outbound events left
         self.out_events = []

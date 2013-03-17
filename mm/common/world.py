@@ -355,13 +355,15 @@ class Actor(object):
                 damage = 0
             else:
                 damage = int(random.uniform(*self.damage_range))
+
+            self.world.on_attack(self, target, damage)
+
+            if damage:
                 target.take_damage(damage, attacker=self)
 
                 # give loot to heroes!
                 if target.is_dead() and self.is_hero:
                     self.reward(target.loot_value)
-
-            self.world.on_attack(self, target, damage)
 
     def is_dead(self):
         return self.health <= 0

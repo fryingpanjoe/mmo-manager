@@ -98,7 +98,11 @@ def main():
         server.start_server()
 
         LOG.info('Entering main loop')
+
         last_time = time.time()
+
+        last_state = []
+
         while True:
             current_time = time.time()
             frame_time = current_time - last_time
@@ -120,9 +124,22 @@ def main():
             event_distributor.update()
 
             # compute delta event
-            # TODO: send only updated actors
-            server.broadcast_event(
-                DeltaStateEvent([actor.get_state() for actor in world.actors]))
+            new_state = [actor.get_state() for actor in world.actors]
+            if last_state:
+                delta_state = []
+                for actor_state in new_state:
+                    for last_actor_state in last_state:
+                        if actor_state.actor_id == last_actor_state.actor_id:
+                            for key, value in actor_state.iteritems():
+                                if value != last_actor_state.get(key):
+                                    delta_state.append(actor_state)
+                                    break
+                            break
+            else:
+                delta_state = new_state
+            last_state = new_state
+
+            server.broadcast_event(DeltaStateEvent(delta_state))
 
             # send data to clients
             server.write_to_clients()

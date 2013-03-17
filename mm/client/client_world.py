@@ -57,6 +57,8 @@ class ClientWorld(object):
             local_actor = self.find_actor_by_id(actor_state.actor_id)
             if local_actor:
                 local_actor.update_state(actor_state)
+            else:
+                LOG.warning('State for unknown actor %d', actor_state.actor_id)
 
     def on_actor_spawned(self, event):
         local_actor = self.find_actor_by_id(event.actor_state.actor_id)
@@ -72,7 +74,14 @@ class ClientWorld(object):
                 self.renderer)
 
     def on_actor_died(self, event):
+        LOG.info('Actor %d died', event.actor_id)
+
         # keep body around for a little while
+        local_actor = self.find_actor_by_id(event.actor_id)
+        if local_actor:
+            self.world.actors.remove(local_actor)
+        else:
+            LOG.warning('Failed to find dead actor %d', event.actor_id)
         self.scheduler.post(
             functools.partial(self.remove_client_actor, event.actor_id), 30)
 
@@ -80,6 +89,8 @@ class ClientWorld(object):
         del self.client_actors[actor_id]
 
     def on_attack(self, event):
+        LOG.info('Actor %d attacked %d', event.attacker_id, event.victim_id)
+
         attacker = self.find_actor_by_id(event.attacker_id)
         victim = self.find_actor_by_id(event.victim_id)
 
