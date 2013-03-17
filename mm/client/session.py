@@ -3,12 +3,11 @@ import pygame
 
 from mm.common.scheduling import Scheduler
 from mm.common.world import World
-from mm.common.networking import GAME_NETWORK_PORT
+from mm.common.networking import Client, DEFAULT_NETWORK_PORT
 from mm.common.events import *
 from mm.client.rendering import Renderer
 from mm.client.hud import Hud
 from mm.client.view import ClientWorld
-from mm.client.client import Client
 
 LOG = logging.getLogger(__name__)
 
@@ -88,7 +87,7 @@ class MenuState(object):
                         self.session.singleplayer_game()
                     if button.button_id == MenuButtonTypes.MULTIPLAYER:
                         self.session.multiplayer_game(
-                            'localhost', GAME_NETWORK_PORT)
+                            'localhost', DEFAULT_NETWORK_PORT)
                     elif button.button_id == MenuButtonTypes.CONTINUE:
                         self.session.return_to_game()
                     elif button.button_id == MenuButtonTypes.QUIT:

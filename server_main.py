@@ -7,8 +7,7 @@ import functools
 
 from thirdparty.vec2 import vec2
 
-from mm.server.server import Server
-
+from mm.common.networking import Server, DEFAULT_NETWORK_PORT
 from mm.common.config import Config
 from mm.common.scheduling import Scheduler
 from mm.common.world import World, ActorStore
@@ -56,7 +55,7 @@ def main():
         scheduler = Scheduler()
 
         LOG.info('...initializing server')
-        server = Server(event_distributor)
+        server = Server(event_distributor, DEFAULT_NETWORK_PORT)
         event_distributor.add_handler(
             server.broadcast_event, ALL_GAME_EVENT_TYPES)
 

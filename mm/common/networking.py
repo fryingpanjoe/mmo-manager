@@ -4,11 +4,13 @@ import select
 import struct
 
 from mm.common.events import (serialize_event_to_string,
-                              serialize_event_from_string)
+                              serialize_event_from_string,
+                              ClientConnectedEvent,
+                              ClientDisconnectedEvent)
 
 LOG = logging.getLogger(__name__)
 
-GAME_NETWORK_PORT = 8888
+DEFAULT_NETWORK_PORT = 8888
 
 
 class WriteBuffer(object):
@@ -257,3 +259,91 @@ class Channel(object):
 
         # clear inbound queue
         self.in_events = []
+
+
+class Client(object):
+    def __init__(self, event_distributor):
+        self.event_distributor = event_distributor
+        self.server_socket = None
+        self.channel = None
+
+    def is_connected(self):
+        return self.server_socket
+
+    def connect(self, address, port):
+        self.server_socket = socket.create_connection((address, port))
+        self.server_socket.setblocking(False)
+        self.channel = Channel(self.server_socket)
+
+    def disconnect(self):
+        self.server_socket.close()
+        self.server_socket = None
+        self.channel = None
+
+    def send_event(self, event):
+        self.channel.send_event(event)
+
+    def update(self):
+        if self.channel.synchronize():
+            for event in self.channel.receive_events():
+                self.event_distributor.post(event)
+        else:
+            self.disconnect()
+            self.event_distributor.post(ClientDisconnectedEvent(0))
+
+
+class Server(object):
+    def __init__(self, event_distributor, port):
+        self.event_distributor = event_distributor
+        self.port = port
+        self.server_socket = None
+        self.client_sockets = []
+        self.channels = {}
+
+    def start_server(self):
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.setblocking(0)
+        self.server_socket.bind(('', self.port))
+        self.server_socket.listen(5)
+
+    def stop_server(self):
+        self.server_socket.close()
+
+    def accept_pending_clients(self):
+        readable, _, _ = select.select([self.server_socket], [], [], 0)
+        if readable:
+            client_socket, address = self.server_socket.accept()
+            client_socket.setblocking(0)
+            self.client_sockets.append(client_socket)
+            client_id = client_socket.fileno()
+            self.channels[client_id] = Channel(client_socket)
+            self.event_distributor.post(ClientConnectedEvent(client_id))
+            LOG.info('Client %d connected', client_id)
+
+    def broadcast_event(self, event):
+        for channel in self.channels.itervalues():
+            channel.send_event(event)
+
+    def send_event(self, client_id, event):
+        self.channels[client_id].send_event(event)
+
+    def read_from_clients(self):
+        readable, _, _ = select.select(self.client_sockets, [], [], 0)
+        for sock in readable:
+            client_id = sock.fileno()
+            if self.channels[client_id].receive_data():
+                for event in self.channels[sock].receive_events():
+                    self.event_distributor.post(ClientEvent(client_id, event))
+            else:
+                LOG.info('Client %d disconnected', client_id)
+                self.client_sockets.remove(sock)
+                del self.channels[client_id]
+                self.event_distributor.post(
+                    ClientDisconnectedEvent(client_id))
+
+    def write_to_clients(self):
+        _, writable, _ = select.select([], self.client_sockets, [], 0)
+        for sock in writable:
+            client_id = sock.fileno()
+            self.channels[client_id].send_data()
