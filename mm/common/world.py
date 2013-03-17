@@ -284,7 +284,7 @@ class Actor(object):
             'wander_timer': self.wander_timer,
             'attack_timer': self.attack_timer,
             'regen_timer': self.regen_timer,
-            'pos': self.pos,
+            'pos': vec2(self.pos.x, self.pos.y),
             'target_id': self.target_id,
             'move_dest': self.move_dest
         })
@@ -396,9 +396,11 @@ class Actor(object):
                 if target.is_dead(): # or not self.is_in_range(target, self.threat_range):
                     self.set_target(None)
                     self.set_random_destination()
+
                 elif self.is_in_range(target, self.attack_range):
                     self.move_dest = self.pos
                     self.shoot_at_target()
+
                 else:
                     self.move_dest = target.pos
         else:

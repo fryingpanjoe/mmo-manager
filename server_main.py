@@ -125,18 +125,24 @@ def main():
 
             # compute delta event
             new_state = [actor.get_state() for actor in world.actors]
+
             if last_state:
                 delta_state = []
                 for actor_state in new_state:
+                    found = False
                     for last_actor_state in last_state:
                         if actor_state.actor_id == last_actor_state.actor_id:
+                            found = True
                             for key, value in actor_state.iteritems():
                                 if value != last_actor_state.get(key):
                                     delta_state.append(actor_state)
                                     break
                             break
+                    if not found:
+                        delta_state.append(actor_state)
             else:
                 delta_state = new_state
+
             last_state = new_state
 
             server.broadcast_event(DeltaStateEvent(delta_state))
