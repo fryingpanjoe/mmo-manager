@@ -76,14 +76,17 @@ class ClientWorld(object):
     def on_actor_died(self, event):
         LOG.info('Actor %d died', event.actor_id)
 
-        # keep body around for a little while
         local_actor = self.find_actor_by_id(event.actor_id)
         if local_actor:
+            # kill the actor
+            local_actor.health = 0
             self.world.actors.remove(local_actor)
+
+            # keep body around for a little while
+            self.scheduler.post(
+                functools.partial(self.remove_client_actor, event.actor_id), 30)
         else:
             LOG.warning('Failed to find dead actor %d', event.actor_id)
-        self.scheduler.post(
-            functools.partial(self.remove_client_actor, event.actor_id), 30)
 
     def remove_client_actor(self, actor_id):
         del self.client_actors[actor_id]
