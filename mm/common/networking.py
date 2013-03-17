@@ -181,7 +181,7 @@ class Channel(object):
     def receive_data(self):
         try:
             # check if there's anything on the socket
-            readable, _, _ = select.select([self.sock], [], [])
+            readable, _, _ = select.select([self.sock], [], [], 0)
             if readable:
                 # read data!
                 data = self.sock.recv(self.MAX_RECEIVE_SIZE)
