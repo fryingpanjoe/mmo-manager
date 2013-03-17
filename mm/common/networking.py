@@ -199,36 +199,48 @@ class Channel(object):
             LOG.exception('Socket error')
             return False
 
+    def send_message(self, message_data):
+        compressed_message_data = compress_data(message_data)
+
+        LOG.debug(
+            'Compression %d -> %d bytes, compression factor %f',
+            len(message_data), len(compressed_message_data),
+            float(len(compressed_message_data)) / len(message_data))
+
+        self.write_buffer.write_int32(self.send_message_id)
+        self.write_buffer.write_string(compressed_message_data)
+
+        self.send_message_id += 1
+
+    def send_all_events(self):
+        message_writer = None
+
+        for event in self.out_events:
+            LOG.info('writing event %s', type(event))
+            if not message_writer:
+                message_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
+
+            # serialize event to string
+            serialized_event = serialize_event_to_string(event)
+
+            if not message_writer.write_string(serialized_event):
+                if len(serialized_event) > self.MAX_MESSAGE_SIZE:
+                    # event will never fit in a message
+                    raise RuntimeError(
+                        'Event size %d too big' % (len(serialized_event),))
+                else:
+                    # send message and continue with the next
+                    self.send_message(message_writer.get_buffer_data())
+                    message_writer = None
+
+        # no outbound events left
+        self.out_events = []
+
     def send_data(self):
         try:
-            # serialize any outbound events in queue
+            # serialize and send all outbound events
             if self.out_events:
-                event_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
-
-                # serialize as many events as possible
-                while self.out_events:
-                    event = self.out_events[0]
-                    serialized_event = serialize_event_to_string(event)
-                    if event_writer.can_write(len(serialized_event)):
-                        event_writer.write_string(serialized_event)
-                        self.out_events.pop(0)
-                    else:
-                        break
-
-                message_data = event_writer.get_buffer_data()
-                compressed_message_data = compress_data(message_data)
-
-                #LOG.debug(
-                #    'Compression %d -> %d bytes, compression factor %f',
-                #    len(message_data), len(compressed_message_data),
-                #    float(len(compressed_message_data)) / len(message_data))
-
-                # write message header and data
-                self.write_buffer.write_int32(self.send_message_id)
-                self.write_buffer.write_string(compressed_message_data)
-
-                # ready for next message
-                self.send_message_id += 1
+                self.send_all_events()
 
             # check if we have anything to send, and try to send it
             if not self.write_buffer.is_empty():
