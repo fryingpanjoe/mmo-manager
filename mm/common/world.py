@@ -416,6 +416,9 @@ class Actor(object):
                 if heal:
                     self.world.on_heal(self, heal)
 
+        self.move(frame_time)
+
+    def move(self, frame_time):
         # move actor
         delta = self.move_dest - self.pos
         distance = delta.normalize_return_length()

@@ -162,6 +162,8 @@ class ClientActor(object):
         self.color = tuple(spawn_params.get('color', (0, 0, 0)))
 
     def update(self, screen, frame_time):
+        # bad client prediction
+        self.actor.move(frame_time)
         self.draw(screen)
 
     def draw(self, screen, icon=False):
