@@ -24,7 +24,6 @@ def decompress_data(data):
     return zlib.decompress(data)
 
 
-
 class WriteBuffer(object):
     def __init__(self, max_size=None):
         self.buffer = ''
@@ -172,11 +171,7 @@ class Channel(object):
         self.out_events = []
 
     def synchronize(self):
-        if self.receive_data():
-            self.send_data()
-            return True
-        else:
-            return False
+        return self.send_data() and self.receive_data()
 
     def receive_data(self):
         try:
