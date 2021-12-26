@@ -19,7 +19,8 @@ class MenuButton(object):
         self.text = font.render(label, True, (32, 32, 32))
         self.bounds = pygame.rect.Rect(x, y, w, h)
 
-    def set_position(self, (x, y)):
+    def set_position(self, p):
+        x, y = p
         self.bounds.topleft = (y, x)
 
     def draw(self, screen, highlight=False):

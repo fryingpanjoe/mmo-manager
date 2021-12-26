@@ -120,7 +120,7 @@ class EventDistributor(object):
         self.queue = []
 
     def send(self, event):
-        for (handler, event_types) in self.handlers.itervalues():
+        for (handler, event_types) in self.handlers.values():
             if type(event) in event_types:
                 handler(event)
 

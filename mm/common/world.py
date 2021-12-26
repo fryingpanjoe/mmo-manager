@@ -291,7 +291,7 @@ class Actor(object):
 
     def update_state(self, state):
         assert state.object_type == 'actor'
-        for key, value in state.iteritems():
+        for key, value in state.items():
             setattr(self, key, value)
 
     def set_destination(self, pos, timeout=30):

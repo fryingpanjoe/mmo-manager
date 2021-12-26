@@ -26,7 +26,7 @@ def decompress_data(data):
 
 class WriteBuffer(object):
     def __init__(self, max_size=None):
-        self.buffer = ''
+        self.buffer = bytearray()
         self.max_size = max_size
 
     def get_buffer_data(self):
@@ -51,32 +51,35 @@ class WriteBuffer(object):
             raise RuntimeError(
                 'Not enough data in buffer to skip %d bytes' % (length,))
 
-    def write(self, data):
+    def _write(self, data):
         if self.can_write(len(data)):
             self.buffer += data
             return True
         else:
             return False
 
-    def write_string(self, data):
+    def write_bytes(self, data):
         return (self.can_write(2 + len(data)) and
                 self.write_uint16(len(data)) and
-                self.write(data))
+                self._write(data))
+
+    def write_string(self, string):
+        return self.write_bytes(string.encode('utf-8'))
 
     def write_int16(self, data):
-        return self.can_write(2) and self.write(struct.pack('!h', data))
+        return self.can_write(2) and self._write(struct.pack('!h', data))
 
     def write_uint16(self, data):
-        return self.can_write(2) and self.write(struct.pack('!H', data))
+        return self.can_write(2) and self._write(struct.pack('!H', data))
 
     def write_int32(self, data):
-        return self.can_write(4) and self.write(struct.pack('!i', data))
+        return self.can_write(4) and self._write(struct.pack('!i', data))
 
     def write_uint32(self, data):
-        return self.can_write(4) and self.write(struct.pack('!I', data))
+        return self.can_write(4) and self._write(struct.pack('!I', data))
 
     def write_float(self, data):
-        return self.can_write(4) and self.write(struct.pack('!f', data))
+        return self.can_write(4) and self._write(struct.pack('!f', data))
 
 
 class ReadBuffer(object):
@@ -84,7 +87,7 @@ class ReadBuffer(object):
         if buf:
             self.buffer = buf
         else:
-            self.buffer = ''
+            self.buffer = bytearray()
 
     def get_buffer_data(self):
         return self.buffer
@@ -108,7 +111,7 @@ class ReadBuffer(object):
         if self.can_read(length):
             self.buffer = self.buffer[length:]
 
-    def read(self, length):
+    def _read(self, length):
         if len(self.buffer) >= length:
             data = self.buffer[:length]
             self.buffer = self.buffer[length:]
@@ -116,34 +119,37 @@ class ReadBuffer(object):
         else:
             return None
 
-    def read_string(self):
+    def read_bytes(self):
         length = struct.unpack('!H', self.peek(2))[0]
         if self.can_read(2 + length):
             self.skip(2)
-            return self.read(length)
+            return self._read(length)
         else:
             return None
 
+    def read_string(self):
+        return self.read_bytes().decode('utf-8')
+
     def read_int16(self):
-        data = self.read(2)
+        data = self._read(2)
         if data:
             data = struct.unpack('!h', data)[0]
         return data
 
     def read_uint16(self):
-        data = self.read(2)
+        data = self._read(2)
         if data:
             data = struct.unpack('!H', data)[0]
         return data
 
     def read_int32(self):
-        data = self.read(4)
+        data = self._read(4)
         if data:
             data = struct.unpack('!i', data)[0]
         return data
 
     def read_uint32(self):
-        data = self.read(2)
+        data = self._read(2)
         if data:
             data = struct.unpack('!I', data)[0]
         return data
@@ -203,7 +209,7 @@ class Channel(object):
         #    float(len(compressed_message_data)) / len(message_data))
 
         self.write_buffer.write_int32(self.send_message_id)
-        self.write_buffer.write_string(compressed_message_data)
+        self.write_buffer.write_bytes(compressed_message_data)
 
         self.send_message_id += 1
 
@@ -214,7 +220,7 @@ class Channel(object):
             # serialize event to string
             serialized_event = serialize_event_to_string(event)
 
-            if not message_writer.write_string(serialized_event):
+            if not message_writer.write_bytes(serialized_event):
                 if len(serialized_event) > self.MAX_MESSAGE_SIZE:
                     # event will never fit in a message
                     raise RuntimeError(
@@ -223,7 +229,7 @@ class Channel(object):
                     # send message and continue with the next
                     self.send_message(message_writer.get_buffer_data())
                     message_writer = WriteBuffer(self.MAX_MESSAGE_SIZE)
-                    if not message_writer.write_string(serialized_event):
+                    if not message_writer.write_bytes(serialized_event):
                         raise RuntimeError('Failed to write event')
 
         # send remaining data
@@ -273,14 +279,14 @@ class Channel(object):
 
         # read message data
         if self.recv_message_id:
-            message_data = self.read_buffer.read_string()
+            message_data = self.read_buffer.read_bytes()
             if message_data:
                 self.on_message_received(decompress_data(message_data))
 
     def on_message_received(self, message_data):
         event_reader = ReadBuffer(message_data)
         while event_reader.can_read():
-            serialized_event = event_reader.read_string()
+            serialized_event = event_reader.read_bytes()
             if serialized_event:
                 self.in_events.append(
                     serialize_event_from_string(serialized_event))
@@ -381,13 +387,15 @@ class Server(object):
             LOG.info('Client %d connected', client_id)
 
     def broadcast_event(self, event):
-        for channel in self.channels.itervalues():
+        for channel in self.channels.values():
             channel.send_event(event)
 
     def send_event(self, client_id, event):
         self.channels[client_id].send_event(event)
 
     def read_from_clients(self):
+        if not self.client_sockets:
+            return
         readable, _, _ = select.select(self.client_sockets, [], [], 0)
         for sock in readable:
             client_id = sock.fileno()
@@ -403,6 +411,8 @@ class Server(object):
                     ClientDisconnectedEvent(client_id))
 
     def write_to_clients(self):
+        if not self.client_sockets:
+            return
         _, writable, _ = select.select([], self.client_sockets, [], 0)
         for sock in writable:
             client_id = sock.fileno()

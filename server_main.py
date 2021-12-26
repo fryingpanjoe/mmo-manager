@@ -133,7 +133,7 @@ def main():
                     for last_actor_state in last_state:
                         if actor_state.actor_id == last_actor_state.actor_id:
                             found = True
-                            for key, value in actor_state.iteritems():
+                            for key, value in actor_state.items():
                                 if value != last_actor_state.get(key):
                                     delta_state.append(actor_state)
                                     break

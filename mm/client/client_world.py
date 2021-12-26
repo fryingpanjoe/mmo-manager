@@ -139,7 +139,7 @@ class ClientWorld(object):
         pass
 
     def update(self, screen, frame_time):
-        for client_actor in self.client_actors.itervalues():
+        for client_actor in self.client_actors.values():
             client_actor.update(screen, frame_time)
 
 
