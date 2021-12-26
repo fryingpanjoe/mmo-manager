@@ -222,6 +222,13 @@ class Channel(object):
 
             if not message_writer.write_bytes(serialized_event):
                 if len(serialized_event) > self.MAX_MESSAGE_SIZE:
+
+                    # TODO(fpj):
+                    # This will crash the game when there are a lot of entities
+                    # in the world. I haven't checked but it's probably the
+                    # DeltaStateEvent that becomes too large if there are a lot
+                    # of actors in it.
+
                     # event will never fit in a message
                     raise RuntimeError(
                         'Event size %d too big' % (len(serialized_event),))
