@@ -323,6 +323,9 @@ class Client(object):
         return self.server_socket
 
     def connect(self, address, port):
+        if self.is_connected():
+            self.disconnect()
+
         LOG.info('Connecting to server %s:%d', address, port)
         self.server_socket = socket.create_connection((address, port))
         if self.server_socket:
@@ -333,28 +336,32 @@ class Client(object):
             return False
 
     def disconnect(self):
-        LOG.info('Disconnecting from server')
-        self.server_socket.close()
-        self.server_socket = None
-        self.channel = None
+        if self.is_connected():
+            LOG.info('Disconnecting from server')
+            self.server_socket.close()
+            self.server_socket = None
+            self.channel = None
 
     def send_event(self, event):
-        self.channel.send_event(event)
+        if self.is_connected():
+            self.channel.send_event(event)
 
     def read_from_server(self):
-        if self.channel.receive_data():
-            for event in self.channel.receive_events():
-                self.event_distributor.post(event)
-        else:
-            LOG.info('Server closed the connection')
-            self.disconnect()
-            self.event_distributor.post(ClientDisconnectedEvent(0))
+        if self.is_connected():
+            if self.channel.receive_data():
+                for event in self.channel.receive_events():
+                    self.event_distributor.post(event)
+            else:
+                LOG.info('Server closed the connection')
+                self.disconnect()
+                self.event_distributor.post(ClientDisconnectedEvent(0))
 
     def write_to_server(self):
-        if not self.channel.send_data():
-            LOG.info('Broken socket, disconnecting')
-            self.disconnect()
-            self.event_distributor.post(ClientDisconnectedEvent(0))
+        if self.is_connected():
+            if not self.channel.send_data():
+                LOG.info('Broken socket, disconnecting')
+                self.disconnect()
+                self.event_distributor.post(ClientDisconnectedEvent(0))
 
 
 class Server(object):

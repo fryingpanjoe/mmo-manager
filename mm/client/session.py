@@ -180,14 +180,19 @@ class MultiplayerState(object):
         self.hud.update(screen, frame_time)
         self.event_distributor.update()
         self.renderer.update(screen, frame_time)
-        self.client.write_to_server()
+        if self.client.is_connected():
+            self.client.write_to_server()
 
     def on_client_disconnected(self, event):
         if event.client_id == 0:
             LOG.info('Disconnected from server')
-            self.session.menu()
+            self.session.disconnect()
         else:
             LOG.info('Client %d disconnected', event.client_id)
+
+    def on_disconnected_from_server(self):
+        if self.client.is_connected():
+            self.client.disconnect()
 
     def on_player_spawn_mob(self, event):
         LOG.info('Player spawn mob %s at %r', event.actor_type, event.pos)
@@ -270,7 +275,7 @@ class Session(object):
 
     def disconnect(self):
         if self.play_state:
-            self.play_state.on_disconnect()
+            self.play_state.on_disconnected_from_server()
             self.play_state = None
 
         self.menu()
