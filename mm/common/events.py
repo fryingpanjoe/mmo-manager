@@ -115,9 +115,10 @@ class EventDistributor(object):
             del self.handlers[handler_id]
 
     def update(self):
-        for event in self.queue:
-            self.send(event)
+        q = self.queue
         self.queue = []
+        for event in q:
+            self.send(event)
 
     def send(self, event):
         for (handler, event_types) in self.handlers.values():
